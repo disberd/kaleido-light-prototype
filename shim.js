@@ -43,7 +43,8 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     if (v.endsWith("%")) return (n / 100) * fontSize(el.parentNode);
     if (v.endsWith("rem")) return n * 16;
     if (v.endsWith("em")) return n * fontSize(el.parentNode);
-    if (v.endsWith("ex") || v.endsWith("ch")) return n * 0.5 * fontSize(el.parentNode); // ponytail: no x-height lookup
+    if (v.endsWith("ex")) return n * xHeight(el.parentNode) * fontSize(el.parentNode);
+    if (v.endsWith("ch")) return n * 0.5 * fontSize(el.parentNode); // ponytail: no "0" advance lookup
     return n;
   }
   function pickFont(el) {
@@ -59,12 +60,36 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     const fam = fonts["times new roman"] || fonts[defaultFamily];
     return fam[variant] || fam[bold ? "bold" : "normal"] || fam.normal;
   }
+  // 1ex in em for an element: the height of the "x" glyph of its font, as Chrome measures it. With no font-family
+  // set anywhere above, Chrome's standard font (macOS Times: 0.449; Times New Roman stands in for it: 0.447), which
+  // is what MathJax's <svg>s get: they are sized in ex. ponytail: regular weight and style.
+  const xHeight = (el) => {
+    let fam = null;
+    for (let e = el; e && e.getAttribute && !fam; e = e.parentNode) fam = attrStyle(e, "font-family");
+    const f = pickFont({ getAttribute: (k) => (k === "font-family" ? fam || "serif" : null) });
+    return (f._klXHeight ??= f.charToGlyph("x").getBoundingBox().y2 / f.unitsPerEm || 0.5);
+  };
   const num = (v) => parseFloat(v) || 0;
-  // An <svg> width/height; MathJax writes ex. ponytail: 1ex = 0.5em, the ratio MathJax and resvg both fall back to.
+  // An <svg> width/height in px; MathJax writes ex.
   const svgLen = (el, k) => {
     const v = el.getAttribute(k) || "";
-    return /e[mx]$/.test(v) ? num(v) * (v.endsWith("ex") ? 0.5 : 1) * fontSize(el) : num(v);
+    return /e[mx]$/.test(v) ? num(v) * (v.endsWith("ex") ? xHeight(el) : 1) * fontSize(el) : num(v);
   };
+  // What a nested <svg>'s viewBox does to its children: scale and align into the viewport (preserveAspectRatio,
+  // default xMidYMid meet). MathJax's <svg> is drawn in units of 1/1000 em through its viewBox.
+  function viewBoxMatrix(el) {
+    const vb = (el.getAttribute("viewBox") || "").split(/[\s,]+/).filter(Boolean).map(Number);
+    const w = svgLen(el, "width"), h = svgLen(el, "height");
+    if (vb.length !== 4 || !(vb[2] > 0 && vb[3] > 0) || !w || !h) return [1, 0, 0, 1, 0, 0];
+    const [align = "xMidYMid", mode = "meet"] = (el.getAttribute("preserveAspectRatio") || "").trim().split(/\s+/).filter(Boolean);
+    let sx = w / vb[2], sy = h / vb[3], tx = 0, ty = 0;
+    if (align !== "none") {
+      sx = sy = mode === "slice" ? Math.max(sx, sy) : Math.min(sx, sy);
+      const at = (a, room) => (a === "Min" ? 0 : a === "Max" ? room : room / 2);
+      tx = at(align.slice(1, 4), w - vb[2] * sx); ty = at(align.slice(5, 8), h - vb[3] * sy);
+    }
+    return [sx, 0, 0, sy, tx - vb[0] * sx, ty - vb[1] * sy];
+  }
   // Text as drawn: text-transform applied, then split into [text, size factor] runs for small caps.
   function caseRuns(el, text) {
     const tt = styleOf(el, "text-transform");
@@ -203,6 +228,12 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
       case "tspan": return el.parentNode ? localBox(el.parentNode) : null; // ponytail: whole text, not the tspan
       case "rect": case "image": case "foreignObject": return { x: a("x"), y: a("y"), width: a("width"), height: a("height") };
       case "svg": if (el.hasAttribute("width")) return { x: 0, y: 0, width: svgLen(el, "width"), height: svgLen(el, "height") }; break; // nested viewport (MathJax)
+      case "use": { // MathJax's glyphs: references into <defs>
+        const id = (el.getAttribute("href") || el.getAttribute("xlink:href") || "").replace(/^#/, "");
+        const ref = id && el.ownerDocument && el.ownerDocument.getElementById(id);
+        const b = ref && mapBox(localBox(ref), matrixOf(ref));
+        return b && { x: b.x + a("x"), y: b.y + a("y"), width: b.width, height: b.height };
+      }
       case "line": return ptsBox([[a("x1"), a("y1")], [a("x2"), a("y2")]]);
       case "circle": return { x: a("cx") - a("r"), y: a("cy") - a("r"), width: 2 * a("r"), height: 2 * a("r") };
       case "ellipse": return { x: a("cx") - a("rx"), y: a("cy") - a("ry"), width: 2 * a("rx"), height: 2 * a("ry") };
@@ -231,7 +262,7 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     }
     let m = matrixOf(this);
     for (let p = this.parentNode; p && p.namespaceURI === SVG_NS && p.parentNode && p.parentNode.namespaceURI === SVG_NS; p = p.parentNode) {
-      m = mul(matrixOf(p), m);
+      m = mul(matrixOf(p), p.localName === "svg" ? mul(viewBoxMatrix(p), m) : m);
     }
     if (this.localName === "svg" && this.parentNode?.namespaceURI !== SVG_NS) {
       return rect({ x: 0, y: 0, width: svgLen(this, "width"), height: svgLen(this, "height") });
@@ -409,6 +440,12 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     return lowerCssText(svg, pageCss)
       .replace(/font-family:\s*([^;"]+)/g, (_, list) => "font-family: " + resolveFamily(list.replace(/&quot;/g, '"')))
       .replace(/image-rendering:\s*pixelated/g, "image-rendering:optimizeSpeed")
+      // MathJax's <svg>s are sized in ex, which resvg takes as 0.5em: write the px Chrome uses. ponytail: font-size
+      // from the tag (plotly sets it there), family from no ancestor (plotly's snapshot sets none above them).
+      .replace(/<svg\b[^>]*="[\d.]+ex"[^>]*>/g, (tag) => {
+        const fs = parseFloat((tag.match(/font-size:\s*([\d.]+)px/) || [, 16])[1]);
+        return tag.replace(/\b(width|height)="([\d.]+)ex"/g, (_, k, n) => `${k}="${+(n * xHeight(null) * fs).toFixed(3)}"`);
+      })
       .replace(/"kl-uri:(\d+)"/g, (_, i) => uris[i]);
   };
 
