@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kaleido-lite results</title>
+<meta name="description" content="Static export of plotly.js figures without a browser: renders by a QuickJS standalone binary compared with headless Chrome.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Lab report: narrow prose column, wide figure rows, Chrome on the left and kaleido-lite on the right. */
+:root {
+  --bg: #f6f7fa;
+  --surface: #ffffff;
+  --ink: #1d2233;
+  --muted: #5c6378;
+  --line: #dde0ea;
+  --accent: #4b55d6;   /* plotly-ish indigo, marks kaleido-lite */
+  --ref: #6b7186;      /* reference (Chrome) */
+  --ok: #1f7a4d; --ok-bg: #e3f3ea;
+  --warn: #8a5a00; --warn-bg: #fbf0d9;
+  --bad: #a3242c; --bad-bg: #fbe3e4;
+  --plot-bg: #ffffff;
+  --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #12141c; --surface: #1a1d28; --ink: #e6e8f0; --muted: #a0a6ba; --line: #2c3142;
+    --accent: #8e96ff; --ref: #a0a6ba;
+    --ok: #7fd8a6; --ok-bg: #173325; --warn: #f0c46a; --warn-bg: #3a2e12; --bad: #ff9aa0; --bad-bg: #3d1a1d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12141c; --surface: #1a1d28; --ink: #e6e8f0; --muted: #a0a6ba; --line: #2c3142;
+  --accent: #8e96ff; --ref: #a0a6ba;
+  --ok: #7fd8a6; --ok-bg: #173325; --warn: #f0c46a; --warn-bg: #3a2e12; --bad: #ff9aa0; --bad-bg: #3d1a1d;
+}
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 var(--body); padding-inline: 16px; }
+main { max-width: 1240px; margin: 0 auto; padding-block: 48px 80px; display: grid; gap: 56px; }
+.prose { max-width: 68ch; }
+h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 700; letter-spacing: -0.01em; }
+h1 .lite { color: var(--accent); }
+h2 { font-size: 1.5rem; font-weight: 700; }
+p { margin: 0; }
+section { display: grid; gap: 18px; min-width: 0; }
+.eyebrow { font: 600 0.75rem/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header { display: grid; gap: 14px; }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 64ch; }
+code { font-family: var(--mono); font-size: 0.86em; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 560px; background: var(--surface); }
+th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.8rem/1.3 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+td:nth-child(2) { color: var(--accent); font-weight: 600; }
+ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.pairs { display: grid; gap: 40px; }
+.pair { margin: 0; display: grid; gap: 10px; min-width: 0; }
+.pair figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; }
+.name { font: 600 0.95rem/1.3 var(--mono); overflow-wrap: anywhere; }
+.chip { font: 600 0.75rem/1 var(--mono); padding: 5px 8px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.chip.ok { color: var(--ok); background: var(--ok-bg); }
+.chip.warn { color: var(--warn); background: var(--warn-bg); }
+.chip.bad { color: var(--bad); background: var(--bad-bg); }
+.chip.time { color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+.note { color: var(--muted); max-width: 80ch; }
+.imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.imgs > div { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.imgs img, .none { width: 100%; height: auto; aspect-ratio: 7 / 5; background: var(--plot-bg); border: 1px solid var(--line); display: block; box-sizing: border-box; }
+.none { display: grid; place-items: center; color: var(--bad); background: var(--bad-bg); font: 600 0.8rem/1 var(--mono); }
+.lab { font: 600 0.72rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ref); }
+.lab.lite { color: var(--accent); }
+details { border-top: 1px solid var(--line); padding-top: 18px; }
+summary { cursor: pointer; font: 700 1.2rem/1.3 var(--display); }
+summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+details[open] summary { margin-bottom: 24px; }
+a { color: var(--accent); }
+footer { color: var(--muted); font-size: 0.9rem; }
+@media (max-width: 760px) {
+  .imgs { grid-template-columns: 1fr; }
+  main { gap: 44px; padding-block: 28px 56px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="eyebrow">PlotlyBaseExtras · kaleido-light-prototype · built by CI on {{DATE}} from <a href="{{COMMIT_URL}}">{{COMMIT}}</a></span>
+    <h1>Kaleido without a browser: <span class="lite">kaleido-lite</span></h1>
+    <p class="lede">plotly.js runs in a light fake DOM (linkedom) inside a QuickJS standalone binary. A shim answers the few layout questions plotly asks (text size, computed style, path length, canvas pixels), plotly writes its own SVG, and resvg rasterizes it. WebGL goes through ANGLE on SwiftShader, and MathJax runs in a spike build. Every pair below shows headless Chrome on the left and the binary on the right, with the same plotly.js 4.1.1 and the same fonts, rendered on a GitHub macOS runner for this page.</p>
+  </header>
+
+  <section>
+    <h2>What was measured</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>kaleido-lite</th><th>Kaleido 0.2.1</th></tr></thead>
+        <tbody>
+          <tr><td>Size on disk</td><td>{{SIZE_BIN}} binary + {{SIZE_ANGLE}} ANGLE with SwiftShader + {{SIZE_RESVG}} resvg ({{SIZE_MJ}} binary with MathJax)</td><td>256 MB</td></tr>
+          <tr><td>Cold process, figure to PNG (this runner)</td><td>2D median {{T2D}} s · WebGL median {{TGL}} s</td><td>4.3 s start, then ~37 ms per figure (measured on a Mac)</td></tr>
+          <tr><td>plotly.js test mocks, 2D ({{N}} of the 859 without WebGL, maps or MathJax)</td><td>{{OK}}/{{N}} render · median {{MEDIAN}}% px differ · {{WITHIN2}}/{{N}} within 2% · {{WITHIN3}}/{{N}} within 3%</td><td>n/a</td></tr>
+          <tr><td>plotly.js test mocks, WebGL ({{GLN}}: scattergl, splom, parcoords, 3D)</td><td>{{GLOK}}/{{GLN}} render · median {{GLMEDIAN}}% px differ · {{GLWITHIN2}}/{{GLN}} within 2%</td><td>n/a</td></tr>
+          <tr><td>plotly.js test mocks with TeX ({{MJN}}, MathJax spike)</td><td>{{MJOK}}/{{MJN}} render · median {{MJMEDIAN}}% px differ</td><td>n/a</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <ul>
+        <li><strong>Renders:</strong> scatter, bar, box, violin, contour, heatmap, image, pie, sunburst, treemap, funnel, waterfall, candlestick, polar, ternary, sankey, table, indicator, geo, and the WebGL traces: scattergl, splom, parcoords and all 3D traces.</li>
+        <li><strong>Does not render:</strong> map subplots (MapLibre needs WebGL 2) and, in the MathJax spike, tables with TeX.</li>
+        <li><strong>Pixel differences</strong> count pixels whose RGB distance from Chrome exceeds 60. Below about 2% it is text antialiasing (resvg against Skia).</li>
+        <li><strong>Two Chrome references.</strong> 2D figures are compared with a screenshot of the plot on screen, and the binary applies the two rules of plotly's page stylesheet that change pixels. WebGL and MathJax figures are compared with <code>Plotly.toImage</code> in Chrome (the screenshot misses 3D scenes), which, like Kaleido, rasterizes the bare SVG; the binary then skips those rules too (<code>PAGE_CSS=0</code>).</li>
+        <li>Times are wall-clock seconds for one process per figure, start to PNG, on this runner.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Hand-made figures</h2>
+    <div class="pairs">
+{{FEATURED}}
+    </div>
+  </section>
+
+  <section>
+    <h2>CSS-only styling</h2>
+    <p class="prose">resvg ignores some of the CSS plotly relies on, so the shim writes it into plain SVG before rasterizing: <code>text-transform</code> and small caps go into the text and its measurement, <code>text-decoration-line</code> becomes SVG <code>text-decoration</code>, <code>text-shadow</code> becomes a filter, and two page-stylesheet rules apply (crisp axis lines, link colour). These were the outliers before that pass.</p>
+    <div class="pairs">
+{{CSS}}
+    </div>
+  </section>
+
+  <section>
+    <h2>WebGL and 3D</h2>
+    <p class="prose">The binary has a built-in <code>qjs:webgl</code> module: headless-gl's native layer ported to QuickJS, with headless-gl's own JavaScript layer on top, on ANGLE loaded from next to the binary. It runs on SwiftShader by default, so it needs no GPU and draws the same pixels on every OS. plotly reads the canvases back into the SVG as images, as in a browser. Sorted by difference; the time chip shows how slow some 3D figures still are in QuickJS.</p>
+    <div class="pairs">
+{{GL}}
+    </div>
+  </section>
+
+  <section>
+    <h2>MathJax (spike)</h2>
+    <p class="prose">A second binary loads MathJax 3 on the fake DOM before plotly, and the shim measures MathJax's SVG output (sizes in <code>ex</code>, nested viewports). The references load the same MathJax in Chrome.</p>
+    <div class="pairs">
+{{MJ}}
+    </div>
+  </section>
+
+  <section class="prose">
+    <h2>Linux without X</h2>
+    <p>Chrome's own Linux ANGLE links against X11, which minimal servers and containers lack. The <a href="{{REPO}}/actions/workflows/angle-linux.yml">angle-linux workflow</a> builds ANGLE with SwiftShader from the commit Chromium 148 ships, with X11 and Wayland off: about 3.5 minutes of checkout and 8 minutes of build on a 4-core runner. Its libraries need only libc, libm, libdl, libpthread and libgcc_s, and the native self-test passes in a Debian container without X libraries, where Chrome's files fail to load.</p>
+  </section>
+
+  <details>
+    <summary>All other 2D plotly.js mocks, sorted by difference ({{N}} total)</summary>
+    <div class="pairs">
+{{MOCKS}}
+    </div>
+  </details>
+
+  <section class="prose">
+    <h2>What is left</h2>
+    <ul>
+      <li>Fonts: the shim and resvg read macOS system fonts, so figures only render on macOS so far. A release would ship its fonts or find them per OS.</li>
+      <li>Release binaries per OS from CI: Linux ANGLE already builds there, macOS and Windows can use Chrome for Testing's ANGLE.</li>
+      <li>Speed of 3D text in QuickJS: plotly turns every label into geometry with rational arithmetic.</li>
+      <li>MathJax: measure <code>ex</code> as Chrome does, support tables with TeX, and decide whether every build loads it.</li>
+      <li>Kaleido's stdin JSON protocol, so PlotlyKaleido.jl can use the binary.</li>
+    </ul>
+  </section>
+
+  <footer>Source and details: <a href="{{REPO}}">{{REPO}}</a>. plotly.js 4.1.1, quickjs-ng 0.17.0, resvg 0.48.1, ANGLE and SwiftShader from Chromium 148, MathJax 3.2.2.</footer>
+</main>
+</body>
+</html>

@@ -12,3 +12,4 @@ native/kl-qjs.c
 /out/**
 !/out/*/
 !/out/*/sample.txt
+_site/

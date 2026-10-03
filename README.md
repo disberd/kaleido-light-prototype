@@ -6,7 +6,8 @@ rasterizes it. WebGL traces draw through ANGLE (headless-gl in Node, `native/web
 in a spike build of the QuickJS binary.
 
 Throwaway prototype for a Kaleido replacement in [PlotlyBaseExtras.jl](https://github.com/disberd/PlotlyBaseExtras.jl).
-Each "Results" section below is one iteration.
+Each "Results" section below is one iteration. Current renders against Chrome:
+https://disberd.github.io/kaleido-light-prototype/ (built by `.github/workflows/docs.yml`).
 
 ## Setup (macOS arm64)
 
@@ -41,6 +42,9 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
 - MathJax (spike): `bun build-qjs.js --mathjax` builds `out/kaleido-lite-mathjax-bin`, which loads MathJax 3
   through `mathjax-setup.js` before plotly; `KL_BIN=out/kaleido-lite-mathjax-bin ./kaleido-lite.sh ...` uses it.
   `MATHJAX=1 ./chrome-toimage.sh` makes references with MathJax loaded in Chrome. Mocks with TeX: `out/mj/sample.txt`.
+- `docs/`: `build.js` makes the results page from `out/` (renders, references, `scores.txt`, `run.log`) with
+  `page.tpl.html`. `.github/workflows/docs.yml` renders everything on a macOS runner with the standalone
+  binaries, takes the Chrome references there, and deploys the page to GitHub Pages.
 - `kaleido-lite.sh`: no Node, no Chrome: `out/kaleido-lite-bin` (figure to SVG) plus `bin/resvg`.
   `qjs-mocks.sh dir` runs the mocks of `dir/sample.txt` through it, one process per figure.
 - `listeners.js`: runs the package's own `lib/*.js` core unmodified with a plotly listener and a

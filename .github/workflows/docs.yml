@@ -1,0 +1,78 @@
+# Results page on GitHub Pages: renders the hand-made figures and the plotly.js mock samples with the standalone
+# binary, takes Chrome references on the same runner, scores them (compare.js) and builds the page (docs/build.js).
+# macOS: the shim and the references use macOS system fonts, and the runner has Google Chrome.
+name: docs
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: [".github/workflows/angle-linux.yml"]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - name: Dependencies and binaries
+        run: |
+          ./fetch-deps.sh
+          npm ci --ignore-scripts --no-audit --no-fund
+          native/build.sh
+          bun build-qjs.js
+          bun build-qjs.js --mathjax
+          node native/selftest.js
+      - name: Render with the standalone binary
+        run: |
+          for f in figs/*.json; do
+            n=$(basename "$f" .json)
+            if [ "$n" = mathjax ]; then
+              PAGE_CSS=0 KL_BIN=out/kaleido-lite-mathjax-bin ./kaleido-lite.sh "$f" "out/$n.png" || echo "render failed: $n"
+            else
+              ./kaleido-lite.sh "$f" "out/$n.png" || echo "render failed: $n"
+            fi
+          done
+          ./qjs-mocks.sh out/mocks > out/mocks/run.log
+          PAGE_CSS=0 ./qjs-mocks.sh out/gl > out/gl/run.log
+          PAGE_CSS=0 KL_BIN=out/kaleido-lite-mathjax-bin ./qjs-mocks.sh out/mj > out/mj/run.log
+          cat out/gl/run.log
+      - name: Chrome references
+        run: |
+          M=plotly-src/test/image/mocks
+          for f in figs/*.json; do
+            n=$(basename "$f" .json)
+            if [ "$n" = mathjax ]; then MATHJAX=1 ./chrome-toimage.sh "$f" "out/$n.chrome.png" || true
+            else ./chrome-ref.sh "$f" "out/$n.chrome.png"; fi
+          done
+          while read -r n; do ./chrome-ref.sh "$M/$n.json" "out/mocks/$n.chrome.png"; done < out/mocks/sample.txt
+          while read -r n; do ./chrome-toimage.sh "$M/$n.json" "out/gl/$n.chrome.png" || true; done < out/gl/sample.txt
+          while read -r n; do MATHJAX=1 ./chrome-toimage.sh "$M/$n.json" "out/mj/$n.chrome.png" || true; done < out/mj/sample.txt
+      - name: Scores and page
+        run: |
+          ls figs/*.json | xargs -n1 basename | sed 's/\.json$//' | xargs node compare.js > out/scores.txt
+          for d in mocks gl mj; do OUT=out/$d xargs node compare.js < out/$d/sample.txt > out/$d/scores.txt; done
+          cat out/scores.txt out/gl/scores.txt out/mj/scores.txt
+          node docs/build.js _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
