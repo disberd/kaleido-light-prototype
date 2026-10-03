@@ -22,7 +22,14 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     fonts[fam] = {};
     for (const [v, buf] of Object.entries(vs)) {
       let font;
-      Object.defineProperty(fonts[fam], v, { enumerable: true, get: () => (font ??= opentype.parse(buf)) });
+      // Verdana kerns in its kern table and has an empty GPOS; opentype.js then kerns nothing, while Chrome and
+      // resvg use the kern table ("Font size 32": 194.2 px in Chrome, 195.2 unkerned).
+      const parse = () => {
+        const f = opentype.parse(buf);
+        if (!f.position.getKerningTables()?.length) { f.position.getKerningTables = () => undefined; f.position.defaultKerningTables = undefined; }
+        return f;
+      };
+      Object.defineProperty(fonts[fam], v, { enumerable: true, get: () => (font ??= parse()) });
     }
   }
 
