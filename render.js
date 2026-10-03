@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { parseHTML } = require("linkedom");
 const { Resvg } = require("@resvg/resvg-js");
-const { installShim, MAC_FONTS } = require("./shim.js");
+const { installShim, MAC_FONTS, patchPlotly, settle3D } = require("./shim.js");
 
 const SUP = "/System/Library/Fonts/Supplemental/";
 const FONT_FILES = MAC_FONTS;
@@ -40,7 +40,12 @@ for (const k of ["document", "Element", "HTMLElement", "SVGElement", "Node", "DO
   globalThis[k] = window[k];
 }
 let t0 = performance.now();
-const Plotly = require("plotly.js-dist");
+// With the QuickJS binary's patch (shim.js patchPlotly: 3D text from glyph outlines).
+const Plotly = (() => {
+  const m = { exports: {} };
+  new Function("module", "exports", patchPlotly(fs.readFileSync(require.resolve("plotly.js-dist"), "utf8")).src)(m, m.exports);
+  return m.exports;
+})();
 const tLoad = performance.now() - t0;
 
 async function render(fig, { width = 700, height = 500, scale = 1, pageCss = true } = {}) {
@@ -62,7 +67,7 @@ async function render(fig, { width = 700, height = 500, scale = 1, pageCss = tru
   return svg;
 }
 
-const snapshot = (gd, scale = 1, pageCss = true) => finishSVG(Plotly.Snapshot.toSVG(gd, "svg", scale), { pageCss });
+const snapshot = (gd, scale = 1, pageCss = true) => (settle3D(gd), finishSVG(Plotly.Snapshot.toSVG(gd, "svg", scale), { pageCss }));
 const toPng = (svg) => new Resvg(svg, { font: { fontFiles: fontPaths, loadSystemFonts: false, defaultFontFamily: "Arial" } }).render().asPng();
 
 async function main() {

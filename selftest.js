@@ -18,4 +18,12 @@ const drawn = (t) => { ctx.fillRect(0, 0, cv.width, cv.height); ctx.font = "64px
 const ab = drawn("Ab");
 assert(ab.length === 2 && ab[0].length === 2 && ab[1].length === 2 && ab.flat(2).every(([x, y]) => x > 5 && x < 90 && y > 50 && y < 102), JSON.stringify(ab));
 assert.strictEqual(drawn("Å"), null);
+// patchPlotly finds vectorize-text's processPixels by shape, minified (1.x to 4.x) or not
+const { patchPlotly } = require("./shim.js");
+for (const src of ["function h(t,e,r){try{return f(t,e,r,!0)}catch(t){}try{return f(t,e,r,!1)}catch(t){}}",
+  "function processPixels(pixels, options, size) {\n  try {\n    return processPixelsImpl(pixels, options, size, true);\n  } catch (e) {\n  }\n  try {\n    return processPixelsImpl(pixels, options, size, false);\n  } catch (e) {}\n}"]) {
+  const r = patchPlotly(src), args = src.match(/\(([^)]*)\)/)[1].replace(/\s/g, "");
+  assert(r.patched && r.src.includes(`globalThis.__klText(${args});if(__kl)return __kl;`), r.src);
+}
+assert(!patchPlotly("function h(t,e,r){return 1}").patched);
 console.log("selftest ok");

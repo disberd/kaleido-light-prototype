@@ -26,6 +26,13 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
 - `qjs-entry.js`: the same pipeline for QuickJS (SVG out), WebGL included. Build: `native/build.sh` (once), then
   `bun build-qjs.js`: bundles `out/kaleido-lite.mjs` and compiles it into `out/kaleido-lite-bin`, with ANGLE
   (`angle/`) and the geo topojson files copied next to it.
+  `kaleido-lite fig.json out.svg [w] [h] [scale] [--plotly <file | version>]`: the binary embeds plotly.js 4.1.1
+  (`plotly.js-dist-min`); `--plotly` loads another release at run time, from a file (any `plotly.js` bundle,
+  minified or not) or by version number (fetched from cdn.plot.ly once with curl, cached in `$KL_CACHE`, else
+  `%LOCALAPPDATA%\kaleido-lite` or `~/.cache/kaleido-lite`). `shim.js`'s `patchPlotly` hooks either.
+- `versions.sh 1.58.5 2.35.2 ...`: the 2D and WebGL samples with `--plotly <release>` against Chrome
+  references made with the same release (`PLOTLY=/abs/plotly.js` for the `chrome-*.sh` scripts), in
+  `out/versions/`.
 - `native/`: `webgl.c` is the `qjs:webgl` module, headless-gl's native layer ported to the QuickJS C API (same
   131 methods), on ANGLE loaded at run time from the binary's directory (`KL_ANGLE_DIR` overrides). It also
   encodes canvas PNGs (`pngDataURL`, deflated with the vendored `stb_image_write.h`). `build.sh` builds `kl-qjs`,
@@ -60,7 +67,7 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
   `chrome-dom.sh` (Chrome's plot DOM, to compare coordinates), `compare.js` (side by side image and share of
   differing pixels), `diffmap.js` and `zoom.js` (where two renders differ), `coverage.js` (one figure per trace
   type), `mocks.js [dir]` (plotly.js test mocks listed in `dir/sample.txt`, from `plotly-src/`, a sparse clone
-  of plotly.js v4.1.1), `selftest.js` (asserts for path length and the CSS pass).
+  of plotly.js v4.1.1), `selftest.js` (asserts for path length, the CSS pass, 3D text outlines and the plotly patch).
 
 ### Building headless-gl on Node 26
 
@@ -194,8 +201,9 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 - Map subplots (MapLibre) need WebGL 2.
 - Figures only render on macOS arm64: `qjs-entry.js` and `render.js` read macOS system fonts. On Linux x64
   only the native layer is tested (CI selftest); Windows is not built at all.
-- Isosurface and volume maths in QuickJS: 7-17 s (see WebGL speed). `render.js` (Node) bundles no plotly
-  patches: it still traces 3D text and can snapshot a 3D camera mid-ease.
+- Isosurface and volume maths in QuickJS: 7-17 s (see WebGL speed).
+- `--plotly` compiles the file at every start (0.5-0.6 s in QuickJS); a bytecode cache per file, or one process
+  rendering many figures, would remove that.
 - headless-gl's GL antialiasing differs from Chrome's on dense lines and wireframes.
 - MathJax is a spike (see above), `drawImage` of a URL (image trace `source`), hsl image color models.
 - opentype.js has no shaping: no ligatures or complex scripts, no per-glyph font fallback.

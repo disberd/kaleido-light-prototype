@@ -2,6 +2,7 @@
 // plotly.js measures nodes with getBoundingClientRect / getBBox and reads getComputedStyle.
 // We answer from font metrics (opentype.js) and plain SVG geometry: no CSS layout, no paint.
 const opentype = require("opentype.js");
+const cdt2d = require("cdt2d");
 
 const GENERIC = { "sans-serif": "arial", serif: "times new roman", monospace: "courier new" };
 const INHERITED = new Set(["font-family", "font-size", "font-weight", "font-style", "font-variant", "text-transform", "text-anchor", "fill", "white-space", "visibility"]);
@@ -295,6 +296,15 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
   window.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0);
   window.cancelAnimationFrame = (id) => clearTimeout(id);
   window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
+  // Loading older plotly releases: up to 3.x they bundle mapbox-gl, which makes a Blob URL for its worker at load,
+  // and 2.x builds asset URLs with new URL(base) and webpack's base from location. QuickJS has none of these.
+  // ponytail: enough to load; nothing is fetched from those URLs.
+  globalThis.Blob ??= class Blob { constructor(parts = [], o = {}) { this.parts = parts; this.type = o.type ?? ""; } };
+  globalThis.URL ??= class URL { constructor(u) { this.href = String(u); } toString() { return this.href; } static createObjectURL() { return "blob:kaleido-lite"; } static revokeObjectURL() {} };
+  window.URL ??= globalThis.URL;
+  window.location ??= { href: "about:blank", protocol: "about:", host: "", hostname: "", origin: "null", pathname: "blank", search: "", hash: "" };
+  // 3D text: vectorize-text's processPixels, hooked by patchPlotly, asks for triangles from the drawn outlines.
+  globalThis.__klText = vectorizeOutlines;
   // Heatmap and image traces paint pixels on a canvas and embed it as a PNG <image>. ponytail: only the calls
   // they make; fillStyle understands rgb()/rgba() only (not hsl image color models), drawImage of a URL is a no-op.
   // WebGL comes from createWebGL; plotly reads it back through toDataURL (2D traces) or readPixels (3D scenes).
@@ -606,4 +616,60 @@ const MAC_FONTS = {
   "times new roman": { normal: "Times New Roman.ttf", bold: "Times New Roman Bold.ttf" },
 };
 
-module.exports = { installShim, MAC_FONTS, png, jsPngDataURL };
+// 3D text. vectorize-text draws a label on a canvas, traces its pixels and cleans the contour with exact rational
+// arithmetic (bn.js), most of a 3D scene's time in QuickJS. The canvas here keeps the glyph outlines it drew
+// (fillText), and this turns them into what processPixels returns: triangles per glyph (cdt2d) or the outline
+// edges (gl-scatter3d asks for both). undefined (trace the pixels after all) for polygons, when a glyph's contours
+// cross, or when the triangulation throws.
+function vectorizeOutlines(pixels, options, size) {
+  const g = pixels && pixels.data && pixels.data.glyphs;
+  if (!g || options.polygons || options.polygon || options.polyline) return;
+  try {
+    // pixel (i, j) is sample (i, j) of the traced image, so canvas point x is sample x - 0.5
+    const positions = textPositions(g.flat(2).map(([x, y]) => [x - 0.5, y - 0.5]), options, size);
+    if (!positions) return;
+    const tri = options.triangles || options.triangulate || options.triangle, cells = [], edges = [];
+    let o = 0;
+    for (const cs of g) {
+      const n0 = o, local = [];
+      for (const c of cs) { for (let i = 0; i < c.length; i++) local.push([o - n0 + i, o - n0 + ((i + 1) % c.length)]); o += c.length; }
+      if (tri) for (const t of cdt2d(positions.slice(n0, o), local, { delaunay: false, exterior: false, interior: true })) cells.push(t.map((i) => i + n0));
+      else for (const [a, b] of local) edges.push([a + n0, b + n0]);
+    }
+    return tri ? { cells, positions } : { edges, positions };
+  } catch {}
+}
+
+// vectorize-text's transformPositions (MIT, unchanged since plotly 1.x): align by the bounding box, scale to ems.
+function textPositions(pts, options, size) {
+  const lo = [1 << 30, 1 << 30], hi = [0, 0];
+  for (const p of pts) for (let j = 0; j < 2; j++) { lo[j] = Math.min(lo[j], p[j]) | 0; hi[j] = Math.max(hi[j], p[j]) | 0; }
+  const dx = { center: -0.5 * (lo[0] + hi[0]), right: -hi[0], end: -hi[0], left: -lo[0], start: -lo[0] }[options.textAlign || "start"];
+  const dy = { hanging: -lo[1], top: -lo[1], middle: -0.5 * (lo[1] + hi[1]), alphabetic: -3 * size, ideographic: -3 * size, bottom: -hi[1] }[options.textBaseline || "alphabetic"];
+  if (dx == null || dy == null) return; // vectorize-text throws for these
+  let scale = 1 / size;
+  if ("lineHeight" in options) scale *= +options.lineHeight;
+  else if ("width" in options) scale = options.width / (hi[0] - lo[0]);
+  else if ("height" in options) scale = options.height / (hi[1] - lo[1]);
+  return pts.map((p) => [scale * (p[0] + dx), scale * (p[1] + dy)]);
+}
+
+// The one source patch, for any plotly.js bundle (1.x to 4.x, minified or not): vectorize-text's processPixels
+// (pixels, options, size) first asks globalThis.__klText. Found by the shape of its body (two tries of the
+// implementation, with true then false), since minifiers rename everything. Unmatched, 3D text is traced as before.
+const PROCESS_PIXELS = /function\s+[\w$]+\s*\(\s*([\w$]+)\s*,\s*([\w$]+)\s*,\s*([\w$]+)\s*\)\s*\{(?=\s*try\s*\{\s*return\s+([\w$]+)\s*\(\s*\1\s*,\s*\2\s*,\s*\3\s*,\s*(?:!0|true)\s*\)\s*;?\s*\}\s*catch\s*\(\s*[\w$]+\s*\)\s*\{\s*\}\s*try\s*\{\s*return\s+\4\s*\(\s*\1\s*,\s*\2\s*,\s*\3\s*,\s*(?:!1|false)\s*\))/;
+function patchPlotly(src) {
+  const m = PROCESS_PIXELS.exec(src);
+  if (!m) return { src, patched: false };
+  const hook = `var __kl=globalThis.__klText&&globalThis.__klText(${m[1]},${m[2]},${m[3]});if(__kl)return __kl;`;
+  return { src: src.slice(0, m.index + m[0].length) + hook + src.slice(m.index + m[0].length), patched: true };
+}
+
+// 3D snapshots: turntable mode (plotly's default) eases the camera's up vector over 500 ms, and a frame shows the
+// camera as it was 32 ms earlier, so a snapshot soon after creating the scene caught it mid-ease, differently on
+// every run. Chrome's snapshots show it settled: keep only each camera's last keyframe. Call before the snapshot.
+function settle3D(gd) {
+  for (const k in gd._fullLayout) gd._fullLayout[k]?._scene?.glplot?.camera?.view?.flush?.(Infinity);
+}
+
+module.exports = { installShim, MAC_FONTS, png, jsPngDataURL, patchPlotly, settle3D };

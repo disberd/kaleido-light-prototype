@@ -1,11 +1,11 @@
 #!/bin/sh
 # Reference PNG from Plotly.toImage inside real headless Chrome (GPU WebGL): ./chrome-toimage.sh figs/x.json out/x.chrome.png
-# MATHJAX=1 also loads MathJax 3 (npm mathjax) first, as Kaleido does.
+# MATHJAX=1 also loads MathJax 3 (npm mathjax) first, as Kaleido does. PLOTLY=/abs/plotly.js: another release.
 FIG=$1; OUT=$2; HTML=$(mktemp -t ref).html; PROFILE=$(mktemp -d); DOM=$(mktemp)
 cat > "$HTML" <<HTML
 <!doctype html><html><body style="margin:0"><div id="gd"></div>
 ${MATHJAX:+<script src="file://$PWD/node_modules/mathjax/es5/tex-svg.js"></script>}
-<script src="file://$PWD/node_modules/plotly.js-dist/plotly.js"></script>
+<script src="file://${PLOTLY:-$PWD/node_modules/plotly.js-dist/plotly.js}"></script>
 <script>const fig = $(cat "$FIG");
 (window.MathJax?.startup?.promise || Promise.resolve()).then(() => Plotly.newPlot(gd, fig.data, {...fig.layout, width: 700, height: 500}, {...fig.config, topojsonURL: "file://$PWD/node_modules/sane-topojson/dist/"}))
   .then(() => Plotly.toImage(gd, {format: "png", width: 700, height: 500}))
