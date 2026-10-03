@@ -161,6 +161,31 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
   again in the plot font, the spike assumes 0.5em everywhere. Tables with TeX (`table_latex_multitrace_scatter`,
   `table_wrapped_birds`, `table_plain_birds`) fail: linkedom lacks an SVG `baseVal` plotly's table reads.
 
+## Results, WebGL speed (2026-10-03, night)
+
+- Where the time went (timers around plotly's functions in a QuickJS build): not the GL backend
+  (`KL_ANGLE=metal` saves at most 0.6 s; SwiftShader's drawing, seen in `readPixels`, takes 0.1-0.7 s), but 3D
+  text. vectorize-text took 80% of `gl3d_text-weirdness`, 35% of `gl3d_bunny-hull` and 22% of
+  `gl3d_isosurface_math`; two thirds of that in `cleanPSLG`, exact rational arithmetic on bn.js. 2D WebGL
+  figures spend little in GL; their time is plotly's ordinary JS, about Node's total.
+- Fix: the canvas shim keeps the glyph outlines it draws, and the bundled vectorize-text (patched in
+  `build-qjs.js`, which now bundles the unminified `plotly.js-dist`) triangulates those per glyph with cdt2d
+  instead of tracing pixels. A glyph whose contours cross (accented letters built from parts, Å Ç ę; ASCII has
+  none in the shim's fonts) falls back to tracing. Curves are flattened to 0.25 px, the tolerance
+  vectorize-text simplifies to: with 8 chords per curve gl-scatter3d's marker glyphs had 4x the triangles and
+  the last markers of `gl3d_opacity-scaling-spikes` went undrawn. The shim's rasterizer also keeps an active
+  edge list.
+- 3D snapshots were not deterministic once rendering got faster: turntable mode eases the camera's up vector
+  over 500 ms and a frame draws the camera of 32 ms earlier, so a snapshot within ~530 ms of creating the scene
+  caught it mid-ease (`gl3d_line_rectangle_render` differed on every run). The patched `toImage` drops all
+  but the camera's last keyframe first, so the snapshot shows it settled, as Chrome's do. Faking
+  `performance.now` instead moved other figures' axes (d3-timer, regl and the camera's earlier frames read it).
+- WebGL mocks: median 2.72 s -> 1.82 s, total 228 s -> 80 s; `gl3d_font-weight-scatter` 128 s -> 5.9 s
+  (Node 4.0 s), `gl3d_text-weirdness` 6.2 s -> 1.8 s, `gl3d_contour-lines` 4.8 s -> 2.3 s. Scores: median
+  0.83% -> 0.81%, the same or better on every mock. 2D and MathJax unchanged.
+- Left: `gl3d_isosurface_math` 16.5 s (Node 3.0 s) and `gl3d_volume_opacityscale-iso` 6.9 s are plotly's
+  isosurface maths, plain JS loops that only a JIT engine runs fast.
+
 ## Known gaps
 
 - Text antialiasing: resvg draws text lighter than Chrome; with hundreds of labels this dominates the
@@ -169,7 +194,8 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 - Map subplots (MapLibre) need WebGL 2.
 - Figures only render on macOS arm64: `qjs-entry.js` and `render.js` read macOS system fonts. On Linux x64
   only the native layer is tested (CI selftest); Windows is not built at all.
-- 3D text in QuickJS (see the timings above).
+- Isosurface and volume maths in QuickJS: 7-17 s (see WebGL speed). `render.js` (Node) bundles no plotly
+  patches: it still traces 3D text and can snapshot a 3D camera mid-ease.
 - headless-gl's GL antialiasing differs from Chrome's on dense lines and wireframes.
 - MathJax is a spike (see above), `drawImage` of a URL (image trace `source`), hsl image color models.
 - opentype.js has no shaping: no ligatures or complex scripts, no per-glyph font fallback.

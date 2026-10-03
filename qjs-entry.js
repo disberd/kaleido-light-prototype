@@ -49,7 +49,8 @@ const { finishSVG } = installShim(window, fonts, { createWebGL, pngDataURL, read
 globalThis.window = globalThis.self = window;
 for (const k of ["document", "Element", "HTMLElement", "SVGElement", "Node", "DOMParser", "XMLSerializer", "XMLHttpRequest", "HTMLCanvasElement", "Image", "getComputedStyle", "requestAnimationFrame", "cancelAnimationFrame", "matchMedia"]) globalThis[k] = window[k];
 const t1 = Date.now();
-const Plotly = require("plotly.js-dist-min");
+// Unminified plotly, which build-qjs.js patches (and minifies).
+const Plotly = require("plotly.js-dist");
 const t2 = Date.now();
 
 // A `qjs -c` standalone binary gets only the user arguments; `qjs script.mjs` also passes the script name.

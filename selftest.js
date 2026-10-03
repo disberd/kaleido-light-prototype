@@ -1,4 +1,4 @@
-// Self-check for the shim's path length and CSS text lowering: node selftest.js
+// Self-check for the shim's path length, CSS text lowering and 3D text outlines: node selftest.js
 const assert = require("assert");
 const { document, finishSVG } = require("./render.js");
 const path = (d) => { const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", d); return p; };
@@ -12,4 +12,10 @@ const out = finishSVG(`<svg xmlns="http://www.w3.org/2000/svg"><g class="crisp">
 assert(out.includes(">F</tspan>") === false && out.includes("F<tspan") && out.includes('style="font-size:7px">OO</tspan>'), out);
 assert(out.includes("text-decoration:underline") && /filter="url\(#kl-ts0\)"/.test(out) && out.includes("<feOffset dx=\"1\" dy=\"1\""), out);
 assert(out.includes("shape-rendering:crispEdges") && !/text-transform|font-variant|text-shadow/.test(out), out);
+// 3D text: the canvas keeps glyph outlines since the last full clear; a glyph whose contours cross (Arial's Å) drops them
+const cv = document.createElement("canvas"), ctx = cv.getContext("2d");
+const drawn = (t) => { ctx.fillRect(0, 0, cv.width, cv.height); ctx.font = "64px Arial"; ctx.fillText(t, 10, 100); return ctx.getImageData(0, 0, cv.width, cv.height).data.glyphs; };
+const ab = drawn("Ab");
+assert(ab.length === 2 && ab[0].length === 2 && ab[1].length === 2 && ab.flat(2).every(([x, y]) => x > 5 && x < 90 && y > 50 && y < 102), JSON.stringify(ab));
+assert.strictEqual(drawn("Å"), null);
 console.log("selftest ok");

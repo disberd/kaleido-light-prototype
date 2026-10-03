@@ -348,8 +348,16 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
         x -= { center: w / 2, right: w, end: w }[this.textAlign] || 0;
         y += { top: asc, hanging: asc, middle: (asc - desc) / 2, bottom: -desc, ideographic: -desc }[this.textBaseline] || 0;
         fillPath(px(), cv.width, cv.height, f.getPath(t, x, y, size, { kerning: true }).commands, fill);
+        // The glyph outlines drawn since the last full clear, for the patched vectorize-text (build-qjs.js),
+        // which triangulates them instead of tracing these pixels with exact rational arithmetic (slow in
+        // QuickJS). A glyph whose contours cross turns that off until the next clear.
+        if (cv._glyphs) f.forEachGlyph(t, x, y, size, { kerning: true }, (g, gx, gy, gs) => {
+          const cs = contours(g.getPath(gx, gy, gs, { kerning: true }, f).commands);
+          if (cs.length && cv._glyphs) cv._glyphs = g.unicode < 128 || !crosses(cs) ? (cv._glyphs.push(cs), cv._glyphs) : null;
+        });
       },
       fillRect(x, y, w, h) { // 32-bit fill per row: the 3D text canvas (8192x1024) is cleared before every label
+        if (x <= 0 && y <= 0 && x + w >= cv.width && y + h >= cv.height) cv._glyphs = [];
         const d = px(), W = cv.width, u32 = new Uint32Array(d.buffer, d.byteOffset, d.length / 4);
         const c = new Uint32Array(new Uint8Array(fill).buffer)[0];
         const i0 = Math.max(0, Math.round(x)), i1 = Math.min(W, Math.round(x + w));
@@ -363,6 +371,7 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
       getImageData(x, y, w, h) {
         const out = new Uint8ClampedArray(4 * w * h), d = px();
         for (let j = 0; j < h; j++) out.set(d.subarray(4 * ((y + j) * cv.width + x), 4 * ((y + j) * cv.width + x + w)), 4 * w * j);
+        if (!x && !y) out.glyphs = cv._glyphs;
         return { width: w, height: h, data: out };
       },
       drawImage() {},
@@ -460,34 +469,63 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
 
 const canvasText = (t) => String(t).replace(/[\t\n\f\r]/g, " ");
 
+// opentype.js path commands -> closed contours of [x, y] points, repeated points dropped. Curves become as few
+// chords as keep within 0.25 px (Wang's formula), the tolerance vectorize-text simplifies its traced contours to:
+// gl-scatter3d repeats a marker glyph's triangles for every point, and too many of them leave points undrawn.
+function contours(cmds) {
+  const cs = [];
+  let c = [], x0 = 0, y0 = 0;
+  const pt = (x, y) => { const p = c[c.length - 1]; if (!p || p[0] !== x || p[1] !== y) c.push([x, y]); };
+  const dd = (ax, ay, bx, by, cx, cy) => Math.hypot(ax - 2 * bx + cx, ay - 2 * by + cy);
+  for (const k of cmds) {
+    if (k.type === "M") cs.push((c = []));
+    if (k.type === "M" || k.type === "L") pt(k.x, k.y);
+    else if (k.type === "Q" || k.type === "C") {
+      const m = k.type === "Q" ? dd(x0, y0, k.x1, k.y1, k.x, k.y) / 4 : (3 / 4) * Math.max(dd(x0, y0, k.x1, k.y1, k.x2, k.y2), dd(k.x1, k.y1, k.x2, k.y2, k.x, k.y));
+      const n = Math.max(1, Math.ceil(Math.sqrt(m / 0.25)));
+      for (let i = 1; i <= n; i++) {
+        const u = i / n, v = 1 - u;
+        if (k.type === "Q") pt(v * v * x0 + 2 * v * u * k.x1 + u * u * k.x, v * v * y0 + 2 * v * u * k.y1 + u * u * k.y);
+        else pt(v ** 3 * x0 + 3 * v * v * u * k.x1 + 3 * v * u * u * k.x2 + u ** 3 * k.x, v ** 3 * y0 + 3 * v * v * u * k.y1 + 3 * v * u * u * k.y2 + u ** 3 * k.y);
+      }
+    }
+    if (k.x != null) { x0 = k.x; y0 = k.y; }
+  }
+  for (const c of cs) { const a = c[0], b = c[c.length - 1]; if (c.length > 1 && a[0] === b[0] && a[1] === b[1]) c.pop(); }
+  return cs.filter((c) => c.length > 2);
+}
+
+// Whether two chords of a glyph's contours properly cross: accented letters built from overlapping parts (Å, Ç,
+// ę in Arial or Times). ASCII has none in the shim's fonts.
+function crosses(cs) {
+  const s = cs.flatMap((c) => c.map((p, i) => [p, c[(i + 1) % c.length]]));
+  const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+  for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) {
+    const [a, b] = s[i], [c, d] = s[j];
+    if (o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0) return true;
+  }
+  return false;
+}
+
 // Nonzero-winding fill of opentype.js path commands into an RGBA buffer, 4 sub-scanlines per pixel row and
 // exact horizontal span coverage. ponytail: plain scanline, fine for glyph-sized paths.
 function fillPath(d, W, H, cmds, color) {
   const edges = [];
-  let x0 = 0, y0 = 0, sx = 0, sy = 0;
-  const line = (x, y) => { if (y !== y0) edges.push([x0, y0, x, y]); x0 = x; y0 = y; };
-  for (const c of cmds) {
-    if (c.type === "M") { if (x0 !== sx || y0 !== sy) line(sx, sy); x0 = sx = c.x; y0 = sy = c.y; }
-    else if (c.type === "L") line(c.x, c.y);
-    else if (c.type === "Q" || c.type === "C") {
-      const ax = x0, ay = y0;
-      for (let i = 1; i <= 8; i++) {
-        const u = i / 8, v = 1 - u;
-        if (c.type === "Q") line(v * v * ax + 2 * v * u * c.x1 + u * u * c.x, v * v * ay + 2 * v * u * c.y1 + u * u * c.y);
-        else line(v ** 3 * ax + 3 * v * v * u * c.x1 + 3 * v * u * u * c.x2 + u ** 3 * c.x, v ** 3 * ay + 3 * v * v * u * c.y1 + 3 * v * u * u * c.y2 + u ** 3 * c.y);
-      }
-    } else if (c.type === "Z") line(sx, sy);
-  }
-  if (x0 !== sx || y0 !== sy) line(sx, sy);
+  for (const c of contours(cmds)) c.forEach(([x0, y0], i) => { const [x, y] = c[(i + 1) % c.length]; if (y !== y0) edges.push([x0, y0, x, y]); });
   if (!edges.length) return;
   const S = 4, ymin = Math.max(0, Math.floor(Math.min(...edges.map((e) => Math.min(e[1], e[3]))))), ymax = Math.min(H, Math.ceil(Math.max(...edges.map((e) => Math.max(e[1], e[3])))));
   const xmin = Math.max(0, Math.floor(Math.min(...edges.map((e) => Math.min(e[0], e[2]))))), xmax = Math.min(W, Math.ceil(Math.max(...edges.map((e) => Math.max(e[0], e[2])))));
   const cov = new Float32Array(W + 1);
+  // active edges: sorted by top, added as the sub-scanline reaches them and dropped below their bottom
+  edges.sort((a, b) => Math.min(a[1], a[3]) - Math.min(b[1], b[3]));
+  let act = [], next = 0;
   for (let j = ymin; j < ymax; j++) {
     cov.fill(0, xmin, xmax + 1);
     for (let s = 0; s < S; s++) {
       const y = j + (s + 0.5) / S, xs = [];
-      for (const [ax, ay, bx, by] of edges) if ((ay <= y) !== (by <= y)) xs.push([ax + ((y - ay) * (bx - ax)) / (by - ay), by > ay ? 1 : -1]);
+      while (next < edges.length && Math.min(edges[next][1], edges[next][3]) <= y) act.push(edges[next++]);
+      act = act.filter((e) => Math.max(e[1], e[3]) > y);
+      for (const [ax, ay, bx, by] of act) if ((ay <= y) !== (by <= y)) xs.push([ax + ((y - ay) * (bx - ax)) / (by - ay), by > ay ? 1 : -1]);
       xs.sort((a, b) => a[0] - b[0]);
       for (let k = 0, wind = 0; k < xs.length - 1; k++) {
         wind += xs[k][1];
