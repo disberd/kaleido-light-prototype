@@ -104,14 +104,14 @@ footer { color: var(--muted); font-size: 0.9rem; }
           <tr><td>Cold process, figure to PNG (this runner)</td><td>2D median {{T2D}} s · WebGL median {{TGL}} s</td><td>4.3 s start, then ~37 ms per figure (measured on a Mac)</td></tr>
           <tr><td>plotly.js test mocks, 2D ({{N}} of the 859 without WebGL, maps or MathJax)</td><td>{{OK}}/{{N}} render · median {{MEDIAN}}% px differ · {{WITHIN2}}/{{N}} within 2% · {{WITHIN3}}/{{N}} within 3%</td><td>n/a</td></tr>
           <tr><td>plotly.js test mocks, WebGL ({{GLN}}: scattergl, splom, parcoords, 3D)</td><td>{{GLOK}}/{{GLN}} render · median {{GLMEDIAN}}% px differ · {{GLWITHIN2}}/{{GLN}} within 2%</td><td>n/a</td></tr>
-          <tr><td>plotly.js test mocks with TeX ({{MJN}}, MathJax spike)</td><td>{{MJOK}}/{{MJN}} render · median {{MJMEDIAN}}% px differ</td><td>n/a</td></tr>
+          <tr><td>plotly.js test mocks with TeX ({{MJN}}, MathJax binary)</td><td>{{MJOK}}/{{MJN}} render · median {{MJMEDIAN}}% px differ</td><td>n/a</td></tr>
         </tbody>
       </table>
     </div>
     <div class="prose">
       <ul>
         <li><strong>Renders:</strong> scatter, bar, box, violin, contour, heatmap, image, pie, sunburst, treemap, funnel, waterfall, candlestick, polar, ternary, sankey, table, indicator, geo, and the WebGL traces: scattergl, splom, parcoords and all 3D traces.</li>
-        <li><strong>Does not render:</strong> map subplots (MapLibre needs WebGL 2) and, in the MathJax spike, tables with TeX.</li>
+        <li><strong>Does not render:</strong> map subplots (MapLibre needs WebGL 2).</li>
         <li><strong>Pixel differences</strong> count pixels whose RGB distance from Chrome exceeds 60. Below about 2% it is text antialiasing (resvg against Skia).</li>
         <li><strong>Two Chrome references.</strong> 2D figures are compared with a screenshot of the plot on screen, and the binary applies the two rules of plotly's page stylesheet that change pixels. WebGL and MathJax figures are compared with <code>Plotly.toImage</code> in Chrome (the screenshot misses 3D scenes), which, like Kaleido, rasterizes the bare SVG; the binary then skips those rules too (<code>PAGE_CSS=0</code>).</li>
         <li>Times are wall-clock seconds for one process per figure, start to PNG, on this runner.</li>
@@ -143,8 +143,8 @@ footer { color: var(--muted); font-size: 0.9rem; }
   </section>
 
   <section>
-    <h2>MathJax (spike)</h2>
-    <p class="prose">A second binary loads MathJax 3 on the fake DOM before plotly, and the shim measures MathJax's SVG output (sizes in <code>ex</code>, nested viewports). The references load the same MathJax in Chrome.</p>
+    <h2>MathJax</h2>
+    <p class="prose">A second binary loads MathJax 3 on the fake DOM before plotly. The shim measures MathJax's SVG output as Chrome does: <code>ex</code> from the x glyph of Chrome's standard font, glyph boxes through <code>&lt;use&gt;</code> and the viewBox. Tables with TeX render too. The references load the same MathJax in Chrome.</p>
     <div class="pairs">
 {{MJ}}
     </div>
@@ -181,7 +181,7 @@ footer { color: var(--muted); font-size: 0.9rem; }
       <li>Fonts: the shim and resvg read macOS system fonts, so figures only render on macOS so far. A release would ship its fonts or find them per OS.</li>
       <li>Release binaries per OS from CI: Linux ANGLE already builds there, macOS and Windows can use Chrome for Testing's ANGLE.</li>
       <li>Speed of plotly's heavy 3D maths in QuickJS: isosurface and volume traces take 7 to 17 s (plain JS loops that only a JIT engine runs fast). 3D text, the old worst case, is now triangulated from glyph outlines.</li>
-      <li>MathJax: measure <code>ex</code> as Chrome does, support tables with TeX, and decide whether every build loads it.</li>
+      <li>MathJax: decide whether every build loads it (+2.1 MB, 0.17 s per process).</li>
       <li>Kaleido's stdin JSON protocol, so PlotlyKaleido.jl can use the binary.</li>
     </ul>
   </section>

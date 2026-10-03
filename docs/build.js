@@ -42,8 +42,7 @@ const glNotes = {
   "gl3d_volume_opacityscale-iso": "Transparency: as above.",
 };
 const mjNotes = {
-  mathjax: "Chrome measures <code>ex</code> in the hidden helper div's font (Times) and again in the plot font; the spike assumes 0.5em. Math sizes differ a little, and the heatmap subplot next to a TeX axis title shifts.",
-  table_latex_multitrace_scatter: "Fails: plotly's table reads an SVG <code>baseVal</code> that linkedom lacks.",
+  table_latex_multitrace_scatter: "TeX in table cells, including eqnarray alignments; the rest is text antialiasing over many small labels.",
 };
 
 const stats = (dir) => {

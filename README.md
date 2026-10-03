@@ -223,10 +223,38 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
   Windows-1252 (tick label `−4` drawn as `â^'4`), which made 2.35 look ten times worse on 3D than it is. 3.x and
   4.x builds escape non-ASCII. The `chrome-*.sh` pages now declare UTF-8.
 
+## Results, MathJax and text metrics (2026-10-04)
+
+- Chrome takes 1ex from the "x" glyph of the font in effect; MathJax's `<svg>`s get Chrome's standard font,
+  macOS Times (0.4487em). The spike's 0.5em made every TeX string 11% too large. The shim measures ex that
+  way and `finishSVG` writes the px into MathJax's `<svg>`s (resvg keeps 0.5em). Math sizes in plotly's DOM
+  now match Chrome's to 0.01 px (compared with `MATHJAX=1 ./chrome-dom.sh`, which gained the option).
+- Plotly places math by the box of its glyphs: `<use>` references into `<defs>`, drawn through the `<svg>`'s
+  viewBox. The shim gave `<use>` no box and ignored viewBoxes; both are measured now (preserveAspectRatio
+  included), and a group holding a nested `<svg>` is measured by what it draws, as in Chrome (legends with math
+  came out 2 px wider).
+- Tables with TeX render: `SVGElement.transform.baseVal.consolidate()` (d3 v3's `d3.transform`), tspans
+  measured by their own text in `getComputedTextLength` (tables wrap cell text word by word with it, each word
+  went on its own line), and attribute values serialized with `&` `<` `>` escaped as browsers do: plotly's
+  `toSVG` decodes entities with `/&[^;]*;/`, and a bare `&` (eqnarray's `&=&` in `data-unformatted`) ate the
+  markup up to the next `;`, dropping a table, the title and the legend.
+- Text metrics for everything: ascent and descent rounded to whole px as Chrome does (text box and table row
+  heights), and Verdana kerned from its `kern` table (its GPOS is empty, so opentype.js kerned nothing; Chrome
+  and resvg use the table). Measured widths match Chrome's `getComputedTextLength` to 0.01 px.
+- Text weight: macOS Chrome draws text with ~14% more ink than resvg; `finishSVG` adds a 0.15px stroke in the
+  text's colour (0.1-0.2px all help, 0.35px overshoots, 0.15 is the widest with no mock worse).
+- MathJax mocks against Chrome: `mathjax` 3.57% -> 1.13%, `mathjax-font-size` 3.26% -> 0.73%,
+  `legend_mathjax_title_and_items` 3.15% -> 0.25%, `ternary-mathjax` 1.10% -> 0.47%,
+  `ternary-mathjax-title-place-subtitle` 1.44% -> 0.34%, `figs/mathjax.json` 0.83% -> 0.09%;
+  `table_latex_multitrace_scatter` 1.85%, `table_wrapped_birds` 2.36%, `table_plain_birds` 2.90% (failed).
+- 2D mocks: median 0.65% -> 0.56%, mean 0.89% -> 0.75%, within 2%: 74 -> 77, 64 better, none worse.
+- Left: text antialiasing. Our text still has ~10% less ink than Chrome's and glyphs sit up to 0.7 px apart; a
+  wider stroke makes shapes worse, so the rest needs Chrome-like antialiasing contrast in the rasterizer.
+
 ## Known gaps
 
-- Text antialiasing: resvg draws text lighter than Chrome; with hundreds of labels this dominates the
-  remaining differences.
+- Text antialiasing: resvg draws text lighter than Chrome even with the 0.15px stroke; with hundreds of labels
+  this dominates the remaining differences.
 - Text shadow filter region is 3x the text box (fine for labels, too small for a huge blur).
 - Map subplots (MapLibre) need WebGL 2.
 - Figures only render on macOS arm64: `qjs-entry.js` and `render.js` read macOS system fonts. On Linux x64
@@ -235,6 +263,6 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 - `--plotly` compiles the file at every start (0.5-0.6 s in QuickJS); a bytecode cache per file, or one process
   rendering many figures, would remove that.
 - headless-gl's GL antialiasing differs from Chrome's on dense lines and wireframes.
-- MathJax is a spike (see above), `drawImage` of a URL (image trace `source`), hsl image color models.
+- MathJax: a separate binary (`--mathjax`), MathJax 3 only; `drawImage` of a URL (image trace `source`), hsl image color models.
 - opentype.js has no shaping: no ligatures or complex scripts, no per-glyph font fallback.
 - `listeners.js` waits a fixed 100 ms for listeners to settle.
