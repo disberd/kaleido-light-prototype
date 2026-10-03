@@ -478,6 +478,15 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     return lowerCssText(svg, pageCss)
       .replace(/font-family:\s*([^;"]+)/g, (_, list) => "font-family: " + resolveFamily(list.replace(/&quot;/g, '"')))
       .replace(/image-rendering:\s*pixelated/g, "image-rendering:optimizeSpeed")
+      // Chrome on macOS draws text heavier than resvg's plain coverage (~14% more ink in a table cell): a 0.15px
+      // stroke in the text's own colour makes up for it (0.1 to 0.2px all help; 0.35 overshoots). Tspans with their
+      // own colour get their own stroke, others inherit it.
+      .replace(/<(text|tspan)\b([^>]*?)style="([^"]*)"/g, (m, tag, pre, st) => {
+        const fill = (st.match(/(?:^|;)\s*fill:\s*([^;]+)/) || [])[1];
+        if (!fill || fill.trim() === "none" || /(?:^|;)\s*stroke(?:-width)?:/.test(st)) return m;
+        const op = (st.match(/fill-opacity:\s*([\d.]+)/) || [, 1])[1];
+        return `<${tag}${pre}style="${st.replace(/;?\s*$/, "")};stroke:${fill.trim()};stroke-width:0.15px;stroke-opacity:${op};stroke-linejoin:round"`;
+      })
       // MathJax's <svg>s are sized in ex, which resvg takes as 0.5em: write the px Chrome uses. ponytail: font-size
       // from the tag (plotly sets it there), family from no ancestor (plotly's snapshot sets none above them).
       .replace(/<svg\b[^>]*="[\d.]+ex"[^>]*>/g, (tag) => {
