@@ -1,5 +1,6 @@
 # Results page on GitHub Pages: renders the hand-made figures and the plotly.js mock samples with the standalone
 # binary, takes Chrome references on the same runner, scores them (compare.js) and builds the page (docs/build.js).
+# One more job per older plotly.js release (versions.sh: --plotly, against Chrome with that release).
 # macOS: the shim and the references use macOS system fonts, and the runner has Google Chrome.
 name: docs
 on:
@@ -15,7 +16,7 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  build:
+  render:
     runs-on: macos-15
     timeout-minutes: 90
     steps:
@@ -57,18 +58,68 @@ jobs:
           while read -r n; do ./chrome-ref.sh "$M/$n.json" "out/mocks/$n.chrome.png"; done < out/mocks/sample.txt
           while read -r n; do ./chrome-toimage.sh "$M/$n.json" "out/gl/$n.chrome.png" || true; done < out/gl/sample.txt
           while read -r n; do MATHJAX=1 ./chrome-toimage.sh "$M/$n.json" "out/mj/$n.chrome.png" || true; done < out/mj/sample.txt
-      - name: Scores and page
+      - name: Scores
         run: |
           ls figs/*.json | xargs -n1 basename | sed 's/\.json$//' | xargs node compare.js > out/scores.txt
           for d in mocks gl mj; do OUT=out/$d xargs node compare.js < out/$d/sample.txt > out/$d/scores.txt; done
           cat out/scores.txt out/gl/scores.txt out/mj/scores.txt
-          node docs/build.js _site
+      - uses: actions/upload-artifact@v4
+        with:
+          name: out
+          path: |
+            out
+            bin/resvg
+            !out/topojson
+            !out/*.mjs
+
+  versions:
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ["1.58.5", "2.35.3", "3.7.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - name: Dependencies and binary
+        run: |
+          ./fetch-deps.sh
+          npm ci --ignore-scripts --no-audit --no-fund
+          native/build.sh
+          bun build-qjs.js
+      - name: plotly.js ${{ matrix.release }} against Chrome with ${{ matrix.release }}
+        run: ./versions.sh ${{ matrix.release }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.release }}
+          path: |
+            out/versions/${{ matrix.release }}/*/scores.txt
+            out/versions/${{ matrix.release }}/*/run.log
+
+  page:
+    needs: [render, versions]
+    if: ${{ !cancelled() && needs.render.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: out
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: out/versions
+      - run: node docs/build.js _site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
-    needs: build
+    needs: page
     runs-on: ubuntu-latest
     environment:
       name: github-pages

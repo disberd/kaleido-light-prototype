@@ -58,6 +58,12 @@ const commit = process.env.GITHUB_SHA || sh("git rev-parse HEAD", "");
 const repo = "https://github.com/" + (process.env.GITHUB_REPOSITORY || "disberd/kaleido-light-prototype");
 
 const s2 = stats("mocks/"), sg = stats("gl/"), sm = stats("mj/");
+// Other releases (versions.sh, one CI job each): out/versions/<release>/{mocks,gl}/scores.txt and run.log
+const semver = (v) => v.split(".").map(Number).reduce((a, x) => a * 1000 + x, 0);
+const releases = (fs.existsSync("out/versions") ? fs.readdirSync("out/versions") : []).filter((d) => /^(release-)?\d+\.\d+\.\d+$/.test(d) && fs.statSync(`out/versions/${d}`).isDirectory())
+  .map((d) => [d.replace(/^release-/, ""), d]).sort((a, b) => semver(b[0]) - semver(a[0]));
+const cell = (st) => (st.n ? `${st.ok}/${st.n} render · median ${st.median}% · ${st.w2}/${st.n} within 2% · ${st.t} s` : "not run");
+const relStats = (d) => { for (const k of ["mocks", "gl"]) { const dir = `versions/${d}/${k}/`; S[dir] = scores(dir); T[dir] = times(dir); } return [stats(`versions/${d}/mocks/`), stats(`versions/${d}/gl/`)]; };
 const vars = {
   DATE: new Date().toISOString().slice(0, 10), REPO: repo, COMMIT: commit.slice(0, 7), COMMIT_URL: `${repo}/commit/${commit}`,
   SIZE_BIN: mb("out/kaleido-lite-bin"), SIZE_MJ: mb("out/kaleido-lite-mathjax-bin"), SIZE_RESVG: mb("bin/resvg"),
@@ -70,6 +76,8 @@ const vars = {
   GL: sorted("gl/").map((n) => pair("gl/", n, n, glNotes[n], "Chrome toImage")).join("\n"),
   MJ: [pair("", "mathjax", "figs/mathjax.json", "Title, axis titles and a legend entry in TeX.", "Chrome toImage")].concat(sorted("mj/").map((n) => pair("mj/", n, n, mjNotes[n], "Chrome toImage"))).join("\n"),
   MOCKS: sorted("mocks/").filter((n) => !cssCases[n]).map((n) => pair("mocks/", n)).join("\n"),
+  RELEASES: [`<tr><td>4.1.1 (built in)</td><td>${cell(s2)}</td><td>${cell(sg)}</td></tr>`]
+    .concat(releases.map(([v, d]) => { const [a, b] = relStats(d); return `<tr><td>${v}</td><td>${cell(a)}</td><td>${cell(b)}</td></tr>`; })).join("\n"),
 };
 const html = fs.readFileSync(`${__dirname}/page.tpl.html`, "utf8").replace(/\{\{([A-Z0-9_]+)\}\}/g, (m, k) => (k in vars ? vars[k] : m));
 fs.writeFileSync(`${site}/index.html`, html);

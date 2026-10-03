@@ -150,6 +150,19 @@ footer { color: var(--muted); font-size: 0.9rem; }
     </div>
   </section>
 
+  <section>
+    <h2>Other plotly.js releases</h2>
+    <p class="prose">The binary embeds plotly.js 4.1.1. <code>--plotly &lt;file | version&gt;</code> loads any other release at run time: a file, or a version number fetched from cdn.plot.ly once. The first run compiles it (about 0.5 s) and caches the bytecode, so later runs load it in about 45 ms. The one source patch (3D text from glyph outlines) finds its place by the shape of the code, so it applies to every release below. Each row renders the same mock samples, scored against Chrome running that same release; times are medians.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>plotly.js</th><th>2D mocks</th><th>WebGL mocks</th></tr></thead>
+        <tbody>
+{{RELEASES}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="prose">
     <h2>Linux without X</h2>
     <p>Chrome's own Linux ANGLE links against X11, which minimal servers and containers lack. The <a href="{{REPO}}/actions/workflows/angle-linux.yml">angle-linux workflow</a> builds ANGLE with SwiftShader from the commit Chromium 148 ships, with X11 and Wayland off: about 3.5 minutes of checkout and 8 minutes of build on a 4-core runner. Its libraries need only libc, libm, libdl, libpthread and libgcc_s, and the native self-test passes in a Debian container without X libraries, where Chrome's files fail to load.</p>
@@ -167,7 +180,7 @@ footer { color: var(--muted); font-size: 0.9rem; }
     <ul>
       <li>Fonts: the shim and resvg read macOS system fonts, so figures only render on macOS so far. A release would ship its fonts or find them per OS.</li>
       <li>Release binaries per OS from CI: Linux ANGLE already builds there, macOS and Windows can use Chrome for Testing's ANGLE.</li>
-      <li>Speed of 3D text in QuickJS: plotly turns every label into geometry with rational arithmetic.</li>
+      <li>Speed of plotly's heavy 3D maths in QuickJS: isosurface and volume traces take 7 to 17 s (plain JS loops that only a JIT engine runs fast). 3D text, the old worst case, is now triangulated from glyph outlines.</li>
       <li>MathJax: measure <code>ex</code> as Chrome does, support tables with TeX, and decide whether every build loads it.</li>
       <li>Kaleido's stdin JSON protocol, so PlotlyKaleido.jl can use the binary.</li>
     </ul>
