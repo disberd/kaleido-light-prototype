@@ -66,6 +66,9 @@ function cacheDir() {
   return dir;
 }
 function loadPlotly(arg) {
+  try { return loadRelease(arg); } catch (e) { std.err.puts(`kaleido-lite: --plotly ${arg}: ${e.message}\n`); std.exit(1); }
+}
+function loadRelease(arg) {
   let file = arg;
   if (/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(arg) && os.stat(arg)[1]) {
     file = `${cacheDir()}/plotly-${arg}.min.js`;
@@ -73,12 +76,12 @@ function loadPlotly(arg) {
       const p = std.popen(`curl -sfL -o "${file}.part" "https://cdn.plot.ly/plotly-${arg}.min.js"`, "r");
       p.readAsString();
       p.close();
-      if (std.loadFile(`${file}.part`) == null) throw new Error(`plotly ${arg}: download from cdn.plot.ly failed`);
+      if (std.loadFile(`${file}.part`) == null) throw new Error("download from cdn.plot.ly failed");
       os.rename(`${file}.part`, file);
     }
   }
   const [st, err] = os.stat(file);
-  if (err) throw new Error(`--plotly ${arg}: cannot read ${file}`);
+  if (err) throw new Error(`cannot read ${file}`);
   const ex = os.stat(os.exePath())[0], id = (s) => `${s.size}-${Math.round(s.mtime)}`;
   const bc = `${cacheDir()}/${file.split(/[\\/]/).pop()}-${id(st)}-${id(ex)}.qbc`;
   let fn = null;
@@ -93,7 +96,7 @@ function loadPlotly(arg) {
   }
   std.evalScript(fn, { eval_function: true });
   const P = globalThis.Plotly || window.Plotly; // 4.x sets only window.Plotly
-  if (!P?.newPlot) throw new Error(`--plotly ${arg}: ${file} did not define Plotly`);
+  if (!P?.newPlot) throw new Error(`${file} did not define Plotly`);
   return P;
 }
 

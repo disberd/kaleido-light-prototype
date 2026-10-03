@@ -3,7 +3,7 @@
 # MATHJAX=1 also loads MathJax 3 (npm mathjax) first, as Kaleido does. PLOTLY=/abs/plotly.js: another release.
 FIG=$1; OUT=$2; HTML=$(mktemp -t ref).html; PROFILE=$(mktemp -d); DOM=$(mktemp)
 cat > "$HTML" <<HTML
-<!doctype html><html><body style="margin:0"><div id="gd"></div>
+<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><div id="gd"></div>
 ${MATHJAX:+<script src="file://$PWD/node_modules/mathjax/es5/tex-svg.js"></script>}
 <script src="file://${PLOTLY:-$PWD/node_modules/plotly.js-dist/plotly.js}"></script>
 <script>const fig = $(cat "$FIG");

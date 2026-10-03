@@ -193,6 +193,36 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 - Left: `gl3d_isosurface_math` 16.5 s (Node 3.0 s) and `gl3d_volume_opacityscale-iso` 6.9 s are plotly's
   isosurface maths, plain JS loops that only a JIT engine runs fast.
 
+## Results, any plotly.js release (2026-10-04, night)
+
+- `--plotly <file | version>` loads another release at run time. The CDN builds of 1.58.5, 2.35.2, 2.35.3,
+  3.0.1, 3.3.1, 3.7.0 and 4.1.1 all load once the shim has three stubs: `Blob` and `URL.createObjectURL`
+  (mapbox-gl, bundled up to 3.x, makes a Blob URL for its worker at load), a `URL` constructor and `location`
+  (2.x builds asset URLs with `new URL(asset, base)`, webpack's base coming from `location`).
+- Compiling a release takes 0.5-0.6 s per process. Its bytecode (5.3 MB, source stripped) is cached per file and
+  binary and loads in about 45 ms: the 2D median with a cached `--plotly` release is 0.33 s, as with the built-in
+  one.
+- One source patch for every release: a hook at the top of vectorize-text's `processPixels`, found by the shape
+  of its body (it matches exactly once in each build above, minified, and in the unminified bundle); the outline
+  triangulation itself is in `shim.js` (`vectorizeOutlines`, with vectorize-text's positioning, unchanged since
+  1.x, and npm `cdt2d`). The 3D camera is settled from outside through `_fullLayout[scene]._scene`, which every
+  release has. A build where the hook does not match still renders, with 3D text traced from pixels.
+- Scores, the 80 2D and 28 WebGL mocks against Chrome running the same release (`versions.sh`, local):
+
+  | plotly.js | 2D: render, median, within 2% | WebGL: render, median, within 2% |
+  |---|---|---|
+  | 4.1.1 | 80/80, 0.65%, 74 | 28/28, 0.81%, 20 |
+  | 3.3.1 | 80/80, 0.65%, 74 | 28/28, 0.81%, 20 |
+  | 3.0.1 | 80/80, 0.65%, 74 | 28/28, 0.81%, 20 |
+  | 2.35.2 | 80/80, 0.65%, 74 | 28/28, 0.82%, 20 |
+  | 1.58.5 | 80/80, 0.60%, 75 | 28/28, 0.95%, 20 |
+
+  The mocks come from plotly.js 4.1.1's test suite; an older release ignores the attributes it does not know,
+  in Chrome as here. The results page gets a row per release from CI (1.58.5, 2.35.3, 3.7.0).
+- The Chrome reference pages had no charset, and Chrome read the raw UTF-8 in 2.x's webpack build as
+  Windows-1252 (tick label `−4` drawn as `â^'4`), which made 2.35 look ten times worse on 3D than it is. 3.x and
+  4.x builds escape non-ASCII. The `chrome-*.sh` pages now declare UTF-8.
+
 ## Known gaps
 
 - Text antialiasing: resvg draws text lighter than Chrome; with hundreds of labels this dominates the
