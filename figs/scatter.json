@@ -1,0 +1,4 @@
+{"data":[{"type":"scatter","mode":"lines+markers","name":"sin(x)","x":[0,1,2,3,4,5,6,7,8,9,10],"y":[0,0.84,0.91,0.14,-0.76,-0.96,-0.28,0.66,0.99,0.41,-0.54]},
+{"type":"scatter","mode":"lines","name":"cos(x) — a longer legend entry","x":[0,1,2,3,4,5,6,7,8,9,10],"y":[1,0.54,-0.42,-0.99,-0.65,0.28,0.96,0.75,-0.15,-0.91,-0.84],"line":{"dash":"dot","width":3}}],
+"layout":{"title":{"text":"Trig functions<br><sup>with a <b>bold</b> and <i>italic</i> subtitle</sup>"},"xaxis":{"title":{"text":"x [rad]"}},"yaxis":{"title":{"text":"amplitude"}},
+"annotations":[{"x":8,"y":0.99,"text":"peak","showarrow":true,"arrowhead":2}]}}

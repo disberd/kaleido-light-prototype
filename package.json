@@ -1,0 +1,22 @@
+{
+  "name": "kaleido-lite",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "gl": "^8.1.6",
+    "linkedom": "^0.18.13",
+    "opentype.js": "^1.3.4",
+    "plotly.js-dist": "^4.1.1",
+    "plotly.js-dist-min": "^4.1.1",
+    "sane-topojson": "^4.0.0"
+  }
+}

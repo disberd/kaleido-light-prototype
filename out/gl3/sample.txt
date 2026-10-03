@@ -1,0 +1,15 @@
+gl3d_bunny-hull
+gl3d_cone-rossler
+gl3d_contour-lines
+gl3d_directions-streamtube2
+gl3d_font-weight-scatter
+gl3d_isosurface_math
+gl3d_line_rectangle_render
+gl3d_mesh3d_enable-alpha-with-rgba-color
+gl3d_opacity-scaling-spikes
+gl3d_scatter-color-mono-and-palette
+gl3d_scatter3d-colorscale
+gl3d_streamtube-simple
+gl3d_surface_opacity-and-opacityscale
+gl3d_text-weirdness
+gl3d_volume_opacityscale-iso

@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+# fetched by fetch-deps.sh / native/build.sh
+angle/
+bin/
+plotly-src/
+native/quickjs/
+# built
+native/kl-qjs
+native/kl-qjs.c
+# renders and references; the mock lists stay
+/out/**
+!/out/*/
+!/out/*/sample.txt
