@@ -323,6 +323,12 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
   const Style = Object.getPrototypeOf(window.document.createElement("div").style);
   Style.set = function (k, v) { return v === "" ? (this.delete(k), this) : Map.prototype.set.call(this, k, v); };
   window.XMLSerializer = class XMLSerializer { serializeToString(n) { return n.outerHTML; } };
+  // Browsers escape & < > in serialized attribute values; linkedom escapes only quotes in HTML documents. Plotly's
+  // toSVG then decodes entities with /&[^;]*;/, so a bare "&" (TeX alignments in data-unformatted) ate the markup
+  // up to the next ";".
+  window.Attr.prototype.toString = function () {
+    return `${this.name}="${String(this.value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}"`;
+  };
   // Geo subplots load topojson with d3.json, i.e. XMLHttpRequest. A URL readFile cannot map fails like offline.
   window.XMLHttpRequest = class XMLHttpRequest {
     onload = null; // d3 checks `"onload" in request`
