@@ -34,6 +34,8 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
   layer (validation, objects, extensions) runs unchanged on `qjs:webgl`.
 - `KL_ANGLE`: ANGLE backend, `swiftshader` (default: CPU Vulkan, no GPU, same code on every OS), `metal`,
   `d3d11`, `vulkan`, `gl`, `default`.
+- `.github/workflows/angle-linux.yml`: builds ANGLE for Linux without X11 (lean: EGL + GLESv2; full: with
+  SwiftShader), reports the time and disk it takes, and runs `native/selftest.js` in a Debian container without X.
 - `kaleido-lite.sh`: no Node, no Chrome: `out/kaleido-lite-bin` (figure to SVG) plus `bin/resvg`.
   `qjs-mocks.sh dir` runs the mocks of `dir/sample.txt` through it, one process per figure.
 - `listeners.js`: runs the package's own `lib/*.js` core unmodified with a plotly listener and a

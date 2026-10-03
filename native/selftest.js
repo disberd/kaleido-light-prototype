@@ -1,5 +1,6 @@
 // node native/selftest.js: checks native/webgl.c through native/kl-qjs, with ANGLE from ../angle. A GL context
-// clears and reads back, and pngDataURL decodes to the same pixels as shim.js's jsPngDataURL.
+// clears and reads back, compiles a shader only WebGL rules accept (plotly's), renders to an RGBA/FLOAT texture
+// (gl-plot3d's transparency pass), and pngDataURL decodes to the same pixels as shim.js's jsPngDataURL.
 const { execFileSync } = require("child_process");
 const zlib = require("zlib");
 const assert = require("assert");
@@ -9,11 +10,20 @@ const pixels = `(w, h) => new Uint8Array(4 * w * h).map((_, i) => (i * 37 + (i >
 const script = `import("qjs:webgl").then(({ pngDataURL, WebGLRenderingContext: W }) => {
   const gl = new W(2, 2, true, true, false, false, true, true, false, false), px = new Uint8Array(16);
   gl.clearColor(1, 0.5, 0, 1); gl.clear(0x4000); gl.readPixels(0, 0, 2, 2, 0x1908, 0x1401, px);
+  const sh = gl.createShader(0x8B31); // a global initialized from a uniform: an error in plain GLSL ES 1.00
+  gl.shaderSource(sh, "attribute vec4 p; uniform float u; float k = 2.0 * u; void main() { gl_Position = k * p; }");
+  gl.compileShader(sh);
+  const tex = gl.createTexture();
+  gl.bindTexture(0x0DE1, tex); gl.texImage2D(0x0DE1, 0, 0x1908, 4, 4, 0, 0x1908, 0x1406, null);
+  gl.bindFramebuffer(0x8D40, gl.createFramebuffer()); gl.framebufferTexture2D(0x8D40, 0x8CE0, 0x0DE1, tex, 0);
   const P = ${pixels};
-  print(JSON.stringify({ clear: [...px], urls: ${JSON.stringify(cases)}.map((c) => pngDataURL(c.w, c.h, P(c.w, c.h), c.flip, c.pre)) }));
+  print(JSON.stringify({ renderer: gl.getParameter(0x1F01), clear: [...px], shader: gl.getShaderParameter(sh, 0x8B81),
+    floatFbo: gl.checkFramebufferStatus(0x8D40), urls: ${JSON.stringify(cases)}.map((c) => pngDataURL(c.w, c.h, P(c.w, c.h), c.flip, c.pre)) }));
 }, (e) => { print(e); std.exit(1); })`;
 const out = JSON.parse(execFileSync(__dirname + "/kl-qjs", ["--std", "-e", script], { env: { ...process.env, KL_ANGLE_DIR: __dirname + "/../angle" } }));
 assert.deepStrictEqual(out.clear, [255, 128, 0, 255, 255, 128, 0, 255, 255, 128, 0, 255, 255, 128, 0, 255], "clear/readPixels");
+assert.strictEqual(out.shader, 1, "WebGL shader rules (EGL_CONTEXT_WEBGL_COMPATIBILITY_ANGLE)");
+assert.strictEqual(out.floatFbo, 0x8cd5, "RGBA/FLOAT texture is color-renderable");
 // RGBA8, filter 0 PNG -> pixels
 const decode = (url) => {
   const b = Buffer.from(url.split(",")[1], "base64"), idat = [];
@@ -29,4 +39,4 @@ const decode = (url) => {
 };
 const P = eval(pixels);
 cases.forEach((c, i) => assert.deepStrictEqual(decode(out.urls[i]), decode(jsPngDataURL(c.w, c.h, P(c.w, c.h), c.flip, c.pre)), JSON.stringify(c)));
-console.log(`native selftest ok (${cases.length} PNG cases)`);
+console.log(`native selftest ok (${cases.length} PNG cases) on ${out.renderer}`);

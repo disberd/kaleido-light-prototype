@@ -11,4 +11,4 @@ sed -e 's|#include "quickjs-libc.h"|&\nJSModuleDef *js_init_module_webgl(JSConte
 grep -q js_init_module_webgl kl-qjs.c
 ${CC:-clang} -O2 -funsigned-char -D_GNU_SOURCE -w -I$Q -Iinclude \
   kl-qjs.c webgl.c $Q/quickjs.c $Q/libregexp.c $Q/libunicode.c $Q/dtoa.c $Q/quickjs-libc.c \
-  $Q/gen/repl.c $Q/gen/standalone.c -lm -lpthread -o kl-qjs
+  $Q/gen/repl.c $Q/gen/standalone.c -lm -lpthread $([ "$(uname)" = Linux ] && echo -ldl) -o kl-qjs
