@@ -59,6 +59,11 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     return fam[variant] || fam[bold ? "bold" : "normal"] || fam.normal;
   }
   const num = (v) => parseFloat(v) || 0;
+  // An <svg> width/height; MathJax writes ex. ponytail: 1ex = 0.5em, the ratio MathJax and resvg both fall back to.
+  const svgLen = (el, k) => {
+    const v = el.getAttribute(k) || "";
+    return /e[mx]$/.test(v) ? num(v) * (v.endsWith("ex") ? 0.5 : 1) * fontSize(el) : num(v);
+  };
   // Text as drawn: text-transform applied, then split into [text, size factor] runs for small caps.
   function caseRuns(el, text) {
     const tt = styleOf(el, "text-transform");
@@ -196,6 +201,7 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
       case "text": return textBox(el);
       case "tspan": return el.parentNode ? localBox(el.parentNode) : null; // ponytail: whole text, not the tspan
       case "rect": case "image": case "foreignObject": return { x: a("x"), y: a("y"), width: a("width"), height: a("height") };
+      case "svg": if (el.hasAttribute("width")) return { x: 0, y: 0, width: svgLen(el, "width"), height: svgLen(el, "height") }; break; // nested viewport (MathJax)
       case "line": return ptsBox([[a("x1"), a("y1")], [a("x2"), a("y2")]]);
       case "circle": return { x: a("cx") - a("r"), y: a("cy") - a("r"), width: 2 * a("r"), height: 2 * a("r") };
       case "ellipse": return { x: a("cx") - a("rx"), y: a("cy") - a("ry"), width: 2 * a("rx"), height: 2 * a("ry") };
@@ -227,7 +233,7 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
       m = mul(matrixOf(p), m);
     }
     if (this.localName === "svg" && this.parentNode?.namespaceURI !== SVG_NS) {
-      return rect({ x: 0, y: 0, width: num(this.getAttribute("width")), height: num(this.getAttribute("height")) });
+      return rect({ x: 0, y: 0, width: svgLen(this, "width"), height: svgLen(this, "height") });
     }
     return rect(mapBox(localBox(this), m) || { x: 0, y: 0, width: 0, height: 0 });
   };

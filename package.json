@@ -14,6 +14,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "gl": "^8.1.6",
     "linkedom": "^0.18.13",
+    "mathjax": "^3.2.2",
     "opentype.js": "^1.3.4",
     "plotly.js-dist": "^4.1.1",
     "plotly.js-dist-min": "^4.1.1",

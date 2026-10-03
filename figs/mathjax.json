@@ -1,0 +1,1 @@
+{"data":[{"x":[1,2,3],"y":[1,4,9],"name":"$\\beta_1$"}],"layout":{"showlegend":true,"title":{"text":"$\\alpha^2 + \\frac{1}{\\sqrt{x}}$"},"xaxis":{"title":{"text":"$x_i \\cdot \\pi$"}},"yaxis":{"title":{"text":"$\\int_0^1 f(t)\\,dt$"}}}}

@@ -2,7 +2,8 @@
 
 Static export of plotly.js figures without a browser: plotly.js runs in a light DOM (linkedom), a
 shim answers the few layout questions plotly asks, plotly serializes its own SVG, and resvg
-rasterizes it. WebGL traces draw through ANGLE (headless-gl in Node, `native/webgl.c` in the QuickJS binary). No MathJax.
+rasterizes it. WebGL traces draw through ANGLE (headless-gl in Node, `native/webgl.c` in the QuickJS binary). MathJax works
+in a spike build of the QuickJS binary.
 
 Throwaway prototype for a Kaleido replacement in [PlotlyBaseExtras.jl](https://github.com/disberd/PlotlyBaseExtras.jl).
 Each "Results" section below is one iteration.
@@ -37,6 +38,9 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
 - `.github/workflows/angle-linux.yml`: builds ANGLE with SwiftShader for Linux x64 without X11 (the commit
   Chromium 148 ships), reports the time and disk it takes, and runs `native/selftest.js` in a Debian container
   without X libraries, with that build and with Chrome for Testing's (which must fail there).
+- MathJax (spike): `bun build-qjs.js --mathjax` builds `out/kaleido-lite-mathjax-bin`, which loads MathJax 3
+  through `mathjax-setup.js` before plotly; `KL_BIN=out/kaleido-lite-mathjax-bin ./kaleido-lite.sh ...` uses it.
+  `MATHJAX=1 ./chrome-toimage.sh` makes references with MathJax loaded in Chrome. Mocks with TeX: `out/mj/sample.txt`.
 - `kaleido-lite.sh`: no Node, no Chrome: `out/kaleido-lite-bin` (figure to SVG) plus `bin/resvg`.
   `qjs-mocks.sh dir` runs the mocks of `dir/sample.txt` through it, one process per figure.
 - `listeners.js`: runs the package's own `lib/*.js` core unmodified with a plotly listener and a
@@ -140,6 +144,19 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 - Without `angle_enable_swiftshader`, ANGLE rejects the SwiftShader device (`eglInitialize` fails), so
   SwiftShader has to come from the same build.
 
+## Results, MathJax spike (2026-10-03, night)
+
+- MathJax 3.2.2 (`es5/tex-svg.js`) runs on linkedom, in Node and in the QuickJS binary: 166 ms to load in
+  QuickJS, +2.1 MB of binary (the source is embedded as text and compiled at start). Needed: a
+  `navigator.platform` for MathJax's menu, assistive MathML off, the global `MathJax` pointed at the loaded one.
+- Shim: `<svg>` width/height in `ex`/`em` (MathJax writes ex; 1ex = 0.5em, MathJax's and resvg's fallback) and
+  nested `<svg>` viewports in bounding boxes. The 80 2D mocks score exactly as before.
+- Against `Plotly.toImage` in Chrome with MathJax: `figs/mathjax.json` 0.83%, `ternary-mathjax` 1.35%,
+  `ternary-mathjax-title-place-subtitle` 1.45%, `legend_mathjax_title_and_items` 3.15%, `mathjax-font-size` 3.21%,
+  `mathjax` 3.56%. The rest is math size and position: Chrome measures ex in the hidden div's font (Times) and
+  again in the plot font, the spike assumes 0.5em everywhere. Tables with TeX (`table_latex_multitrace_scatter`,
+  `table_wrapped_birds`, `table_plain_birds`) fail: linkedom lacks an SVG `baseVal` plotly's table reads.
+
 ## Known gaps
 
 - Text antialiasing: resvg draws text lighter than Chrome; with hundreds of labels this dominates the
@@ -150,6 +167,6 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
   only the native layer is tested (CI selftest); Windows is not built at all.
 - 3D text in QuickJS (see the timings above).
 - headless-gl's GL antialiasing differs from Chrome's on dense lines and wireframes.
-- MathJax, `drawImage` of a URL (image trace `source`), hsl image color models.
+- MathJax is a spike (see above), `drawImage` of a URL (image trace `source`), hsl image color models.
 - opentype.js has no shaping: no ligatures or complex scripts, no per-glyph font fallback.
 - `listeners.js` waits a fixed 100 ms for listeners to settle.
