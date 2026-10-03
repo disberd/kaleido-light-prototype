@@ -4,3 +4,5 @@ legend_mathjax_title_and_items
 ternary-mathjax
 ternary-mathjax-title-place-subtitle
 table_latex_multitrace_scatter
+table_wrapped_birds
+table_plain_birds

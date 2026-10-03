@@ -116,8 +116,9 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
           if (c.nodeType === 3 && c.data) {
             const el = c.parentNode, size = fontSize(el), font = pickFont(el);
             for (const [t, k] of caseRuns(el, c.data)) w += font.getAdvanceWidth(t, size * k, { kerning: true });
-            asc = Math.max(asc, (font.ascender / font.unitsPerEm) * size);
-            desc = Math.max(desc, (-font.descender / font.unitsPerEm) * size);
+            // Chrome rounds a font's ascent and descent to whole px (Arial 14px: 12.67 + 2.97 -> 13 + 3).
+            asc = Math.max(asc, Math.round((font.ascender / font.unitsPerEm) * size));
+            desc = Math.max(desc, Math.round((-font.descender / font.unitsPerEm) * size));
             any = true;
           } else if (c.nodeType === 1) walk(c);
         }
@@ -278,8 +279,11 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     const b = localBox(this) || { x: 0, y: 0, width: 0, height: 0 };
     return { x: b.x, y: b.y, width: b.width, height: b.height };
   };
+  // A tspan measures only its own characters (plotly's tables wrap cell text word by word with it).
+  const advance = (n) => [...n.childNodes].reduce((w, c) => w + (c.nodeType === 1 ? advance(c) : c.nodeType === 3 && c.data
+    ? caseRuns(c.parentNode, c.data).reduce((s, [t, k]) => s + pickFont(c.parentNode).getAdvanceWidth(t, fontSize(c.parentNode) * k, { kerning: true }), 0) : 0), 0);
   window.Element.prototype.getComputedTextLength = function () {
-    return textBox(this.localName === "text" ? this : this.closest("text")).width;
+    return this.localName === "text" || !this.closest("text") ? textBox(this.localName === "text" ? this : this.closest("text")).width : advance(this);
   };
 
   // Annotation arrows and contour labels walk their path. Moves between subpaths add no length, like in browsers.
@@ -306,6 +310,15 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
   };
   // linkedom upper-cases SVG tag names; browsers keep them as written and plotly compares nodeName === "text".
   for (const k of ["nodeName", "tagName"]) Object.defineProperty(window.SVGElement.prototype, k, { get() { return this.localName; } });
+  // d3 v3's d3.transform (plotly's tables) parses transform strings through the SVG DOM. ponytail: consolidate only.
+  Object.defineProperty(window.SVGElement.prototype, "transform", { configurable: true, get() {
+    const el = this;
+    return { baseVal: { consolidate() {
+      if (!(el.getAttribute("transform") || "").trim()) return null;
+      const [a, b, c, d, e, f] = matrixOf(el);
+      return { matrix: { a, b, c, d, e, f } };
+    } } };
+  } });
   // Browsers drop a style property set to "", linkedom keeps "prop:;" and resvg then ignores the rest of the style.
   const Style = Object.getPrototypeOf(window.document.createElement("div").style);
   Style.set = function (k, v) { return v === "" ? (this.delete(k), this) : Map.prototype.set.call(this, k, v); };
