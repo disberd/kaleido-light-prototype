@@ -1,9 +1,8 @@
 # Linux ANGLE without X11 (Chrome for Testing's libGLESv2.so needs libX11, libXext and libxcb), built from the
 # ANGLE commit Chromium 148 ships. Then native/selftest.js in a Debian container that has no X libraries.
-# The build job summary reports checkout and build time and size.
-#   lean:   libEGL + libGLESv2 only; SwiftShader and the Vulkan loader come from Chrome for Testing.
-#   full:   SwiftShader and the Vulkan loader built too.
-#   chrome: Chrome for Testing's own files, expected to fail to load without X.
+# The build job summary reports checkout and build time and size. The test also runs Chrome for Testing's own
+# files there, which must fail to load without X. ponytail: no lean (EGL + GLESv2 only) variant: without
+# angle_enable_swiftshader ANGLE rejects the SwiftShader device, and on x64 SwiftShader (Subzero) adds ~3 min.
 name: angle-linux
 on:
   workflow_dispatch:
@@ -14,10 +13,6 @@ env:
   CFT_ZIP: https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.96/linux64/chrome-headless-shell-linux64.zip
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [lean, full]
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
@@ -43,8 +38,7 @@ jobs:
         working-directory: /mnt/w/angle
         run: |
           t=$SECONDS
-          sws=$([ "${{ matrix.variant }}" = full ] && echo true || echo false)
-          gn gen out/R --args="is_debug=false is_component_build=false target_cpu=\"x64\" angle_use_x11=false angle_use_wayland=false angle_enable_gl=false angle_enable_null=false angle_enable_wgpu=false angle_build_tests=false angle_has_frame_capture=false angle_enable_swiftshader=$sws"
+          gn gen out/R --args="is_debug=false is_component_build=false target_cpu=\"x64\" angle_use_x11=false angle_use_wayland=false angle_enable_gl=false angle_enable_null=false angle_enable_wgpu=false angle_build_tests=false angle_has_frame_capture=false angle_enable_swiftshader=true"
           autoninja -C out/R libEGL libGLESv2
           echo "build: $((SECONDS - t)) s, out/ $(du -sh out/R | cut -f1), all of /mnt/w $(du -sh /mnt/w | cut -f1)" >> /mnt/w/stats
           mkdir /mnt/w/dist
@@ -55,10 +49,10 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          { echo "### ANGLE ${{ matrix.variant }} ($(nproc) cores)"; echo '```'; cat /mnt/w/stats; df -h /mnt | tail -1; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "### ANGLE ($(nproc) cores)"; echo '```'; cat /mnt/w/stats; df -h /mnt | tail -1; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: angle-${{ matrix.variant }}
+          name: angle
           path: /mnt/w/dist
 
   test:
@@ -67,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [lean, full, chrome]
+        variant: [built, chrome]
     runs-on: ubuntu-24.04
     container: debian:bookworm-slim
     steps:
@@ -80,16 +74,14 @@ jobs:
       - uses: actions/download-artifact@v4
         if: matrix.variant != 'chrome'
         with:
-          name: angle-${{ matrix.variant }}
+          name: angle
           path: angle
       - name: Chrome for Testing files
-        if: matrix.variant != 'full'
+        if: matrix.variant == 'chrome'
         run: |
           curl -sSfLo /tmp/cft.zip "$CFT_ZIP"
-          files="libvulkan.so.1 libvk_swiftshader.so vk_swiftshader_icd.json"
-          [ "${{ matrix.variant }}" = chrome ] && files="$files libEGL.so libGLESv2.so"
           mkdir -p angle
-          for f in $files; do unzip -oqj /tmp/cft.zip "*/$f" -d angle; done
+          for f in libEGL.so libGLESv2.so libvulkan.so.1 libvk_swiftshader.so vk_swiftshader_icd.json; do unzip -oqj /tmp/cft.zip "*/$f" -d angle; done
       - name: Build kl-qjs
         run: |
           ls -la angle
@@ -97,8 +89,6 @@ jobs:
           native/build.sh
       - name: native/selftest.js
         run: |
-          # ANGLE only points Vulkan at SwiftShader's ICD when it built SwiftShader itself
-          [ "${{ matrix.variant }}" = lean ] && export VK_ICD_FILENAMES="$PWD/angle/vk_swiftshader_icd.json"
           if [ "${{ matrix.variant }}" = chrome ]; then
             ldd angle/libGLESv2.so | grep "not found"
             ! node native/selftest.js

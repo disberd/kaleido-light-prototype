@@ -34,8 +34,9 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
   layer (validation, objects, extensions) runs unchanged on `qjs:webgl`.
 - `KL_ANGLE`: ANGLE backend, `swiftshader` (default: CPU Vulkan, no GPU, same code on every OS), `metal`,
   `d3d11`, `vulkan`, `gl`, `default`.
-- `.github/workflows/angle-linux.yml`: builds ANGLE for Linux without X11 (lean: EGL + GLESv2; full: with
-  SwiftShader), reports the time and disk it takes, and runs `native/selftest.js` in a Debian container without X.
+- `.github/workflows/angle-linux.yml`: builds ANGLE with SwiftShader for Linux x64 without X11 (the commit
+  Chromium 148 ships), reports the time and disk it takes, and runs `native/selftest.js` in a Debian container
+  without X libraries, with that build and with Chrome for Testing's (which must fail there).
 - `kaleido-lite.sh`: no Node, no Chrome: `out/kaleido-lite-bin` (figure to SVG) plus `bin/resvg`.
   `qjs-mocks.sh dir` runs the mocks of `dir/sample.txt` through it, one process per figure.
 - `listeners.js`: runs the package's own `lib/*.js` core unmodified with a plotly listener and a
@@ -126,14 +127,27 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
   X needs ANGLE built with `angle_use_x11=false`. Size next to the 7.7 MB binary: macOS 23.4 MB (SwiftShader is
   16.5 MB there), Linux 11.7 MB, Windows 14.7 MB.
 
+## Results, Linux ANGLE without X11 in CI (2026-10-03, night)
+
+- GitHub's 4-core runner: `gclient sync` 3.4 to 3.7 min (with `.gclient` written by hand: ANGLE's
+  `bootstrap.py` adds `target_os = ['android']` on Linux, which pulls the Android SDK and NDK), then
+  `autoninja libEGL libGLESv2` 5.2 min without SwiftShader, 8.0 min with it (1054 steps; on x64 SwiftShader
+  uses Subzero, not LLVM). Disk use is in the run summary.
+- `libEGL.so` 0.4 MB, `libGLESv2.so` 8.5 MB, `libvk_swiftshader.so` 6.5 MB, `libvulkan.so.1` 0.9 MB, all
+  needing only libc, libm, libdl, libpthread and libgcc_s.
+- `native/selftest.js` passes in `debian:bookworm-slim` with no X libraries (SwiftShader Device (Subzero)).
+  Chrome for Testing's files fail there: `libX11.so.6 => not found`.
+- Without `angle_enable_swiftshader`, ANGLE rejects the SwiftShader device (`eglInitialize` fails), so
+  SwiftShader has to come from the same build.
+
 ## Known gaps
 
 - Text antialiasing: resvg draws text lighter than Chrome; with hundreds of labels this dominates the
   remaining differences.
 - Text shadow filter region is 3x the text box (fine for labels, too small for a huge blur).
 - Map subplots (MapLibre) need WebGL 2.
-- Only tested on macOS arm64. The ANGLE files from Chrome for Testing for Linux need X11 libraries;
-  `webgl.c` has the Windows and Linux loading code, but nothing has been built or run there yet.
+- Figures only render on macOS arm64: `qjs-entry.js` and `render.js` read macOS system fonts. On Linux x64
+  only the native layer is tested (CI selftest); Windows is not built at all.
 - 3D text in QuickJS (see the timings above).
 - headless-gl's GL antialiasing differs from Chrome's on dense lines and wireframes.
 - MathJax, `drawImage` of a URL (image trace `source`), hsl image color models.
