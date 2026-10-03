@@ -8,6 +8,8 @@ const GENERIC = { "sans-serif": "arial", serif: "times new roman", monospace: "c
 const INHERITED = new Set(["font-family", "font-size", "font-weight", "font-style", "font-variant", "text-transform", "text-anchor", "fill", "white-space", "visibility"]);
 // Chrome synthesizes small caps (fonts here have no smcp feature) as upper case at 70% size.
 const SMALL_CAPS = 0.7;
+// Height of the x glyph of Chrome's standard font (macOS Times), in em: 1ex where no font-family is set.
+const CHROME_STANDARD_XHEIGHT = 0.4487;
 const DEFAULTS = { display: "block", "font-size": "16px", "font-family": "sans-serif", "text-anchor": "start", position: "static" };
 
 // fontFiles: { family: { normal, bold, italic, bolditalic } } of ArrayBuffers. Family names lower case.
@@ -61,12 +63,13 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
     return fam[variant] || fam[bold ? "bold" : "normal"] || fam.normal;
   }
   // 1ex in em for an element: the height of the "x" glyph of its font, as Chrome measures it. With no font-family
-  // set anywhere above, Chrome's standard font (macOS Times: 0.449; Times New Roman stands in for it: 0.447), which
-  // is what MathJax's <svg>s get: they are sized in ex. ponytail: regular weight and style.
+  // set anywhere above (MathJax's <svg>s, sized in ex), Chrome's standard font: macOS Times, x at 0.4487em (Times
+  // New Roman, its stand-in for text here, has 0.4473: 0.3% smaller math). ponytail: regular weight and style.
   const xHeight = (el) => {
     let fam = null;
     for (let e = el; e && e.getAttribute && !fam; e = e.parentNode) fam = attrStyle(e, "font-family");
-    const f = pickFont({ getAttribute: (k) => (k === "font-family" ? fam || "serif" : null) });
+    if (!fam) return CHROME_STANDARD_XHEIGHT;
+    const f = pickFont({ getAttribute: (k) => (k === "font-family" ? fam : null) });
     return (f._klXHeight ??= f.charToGlyph("x").getBoundingBox().y2 / f.unitsPerEm || 0.5);
   };
   const num = (v) => parseFloat(v) || 0;
@@ -228,7 +231,16 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
       case "text": return textBox(el);
       case "tspan": return el.parentNode ? localBox(el.parentNode) : null; // ponytail: whole text, not the tspan
       case "rect": case "image": case "foreignObject": return { x: a("x"), y: a("y"), width: a("width"), height: a("height") };
-      case "svg": if (el.hasAttribute("width")) return { x: 0, y: 0, width: svgLen(el, "width"), height: svgLen(el, "height") }; break; // nested viewport (MathJax)
+      case "svg": { // nested <svg> (MathJax): its drawing through the viewBox, as Chrome measures it; else the viewport
+        let box = null;
+        const vm = viewBoxMatrix(el);
+        for (const c of el.children || []) {
+          if (c.namespaceURI !== el.namespaceURI || SKIP.has(c.localName.toLowerCase()) || styleOf(c, "display") === "none") continue;
+          box = union(box, mapBox(localBox(c), mul(vm, matrixOf(c))));
+        }
+        if (box || !el.hasAttribute("width")) return box;
+        return { x: 0, y: 0, width: svgLen(el, "width"), height: svgLen(el, "height") };
+      }
       case "use": { // MathJax's glyphs: references into <defs>
         const id = (el.getAttribute("href") || el.getAttribute("xlink:href") || "").replace(/^#/, "");
         const ref = id && el.ownerDocument && el.ownerDocument.getElementById(id);
