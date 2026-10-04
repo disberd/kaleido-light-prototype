@@ -380,7 +380,7 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
   const CanvasProto = window.HTMLCanvasElement.prototype;
   // A headless-gl drawing buffer has a fixed size unless resized explicitly; plotly sizes canvases both through
   // the width/height properties and through setAttribute (d3 .attr).
-  const glResize = (cv) => { if (cv._gl && cv.width && cv.height) cv._gl.getExtension("STACKGL_resize_drawingbuffer")?.resize(cv.width, cv.height); };
+  const glResize = (cv) => { if (cv._gl && cv.width && cv.height) { cv._gl.getExtension("STACKGL_resize_drawingbuffer")?.resize(cv.width, cv.height); clearDrawingBuffer(cv._gl); } };
   // As in browsers, width/height reflect the attributes (linkedom keeps them apart).
   const setAttr = window.Element.prototype.setAttribute;
   for (const [k, def] of [["width", 300], ["height", 150]]) {
@@ -562,6 +562,24 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
 }
 
 const canvasText = (t) => String(t).replace(/[\t\n\f\r]/g, " ");
+
+// A resized drawing buffer starts cleared (WebGL spec): color 0, depth 1, stencil 0. headless-gl reallocates it
+// with undefined contents, and SwiftShader's depth then fails every test: gl-plot3d ends a frame with
+// transparent traces with depthMask(false), so its next clear leaves the depth alone and the axes went missing.
+function clearDrawingBuffer(gl) {
+  const P = (k) => gl.getParameter(k), fb = P(gl.FRAMEBUFFER_BINDING), sc = gl.isEnabled(gl.SCISSOR_TEST);
+  const cc = P(gl.COLOR_CLEAR_VALUE), cd = P(gl.DEPTH_CLEAR_VALUE), cs = P(gl.STENCIL_CLEAR_VALUE);
+  const cm = P(gl.COLOR_WRITEMASK), dm = P(gl.DEPTH_WRITEMASK), smf = P(gl.STENCIL_WRITEMASK), smb = P(gl.STENCIL_BACK_WRITEMASK);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.disable(gl.SCISSOR_TEST);
+  gl.colorMask(true, true, true, true); gl.depthMask(true); gl.stencilMask(0xff);
+  gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clearStencil(0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  if (sc) gl.enable(gl.SCISSOR_TEST);
+  gl.colorMask(...cm); gl.depthMask(dm); gl.stencilMaskSeparate(gl.FRONT, smf); gl.stencilMaskSeparate(gl.BACK, smb);
+  gl.clearColor(...cc); gl.clearDepth(cd); gl.clearStencil(cs);
+}
 
 // opentype.js path commands -> closed contours of [x, y] points, repeated points dropped. Curves become as few
 // chords as keep within 0.25 px (Wang's formula), the tolerance vectorize-text simplifies its traced contours to:

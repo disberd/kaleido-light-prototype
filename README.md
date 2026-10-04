@@ -121,9 +121,11 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
   SwiftShader backend. 28/28 WebGL mocks render, median 0.83% differing pixels against Chrome's
   `Plotly.toImage` (Node with headless-gl: 0.91%), 20/28 within 2% (Node: 21). The 2D sample still renders 80/80:
   median 0.65% (Node 0.69%), 74/80 within 2% (same as Node).
-- Two transparency figures score lower on SwiftShader than in Node (`surface_opacity-and-opacityscale` 1.94% vs
-  1.49%, `volume_opacityscale-iso` 2.08% vs 1.75%). The references come from Chrome on Metal: `KL_ANGLE=metal`
-  gives 1.43% and 1.58% for these two.
+- Two transparency figures scored lower on SwiftShader (`surface_opacity-and-opacityscale` 1.94%,
+  `volume_opacityscale-iso` 2.08%): their 3D axes were missing. headless-gl reallocates a resized drawing buffer
+  with undefined contents, and gl-plot3d ends a frame with transparent traces with `depthMask(false)`, so its next
+  clear leaves that depth alone; SwiftShader's then fails every depth test. The shim now clears a resized drawing
+  buffer as the WebGL spec does (color 0, depth 1, stencil 0): 1.40% and 1.51%.
 - Fixes this needed, all in `native/webgl.c`: a WebGL compatibility context (`EGL_CONTEXT_WEBGL_COMPATIBILITY_ANGLE`,
   as Chrome; current ANGLE rejects plotly's non-constant global initializers in plain ES 2.0) with every
   requestable extension on, exactly ES 2.0, and unsized float textures sized (`RGBA`/`FLOAT` to `RGBA32F`), the

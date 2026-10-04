@@ -38,8 +38,6 @@ const glNotes = {
   "gl3d_opacity-scaling-spikes": "Dense marker outlines: antialiasing differs between SwiftShader and Chrome's GL.",
   "gl3d_font-weight-scatter": "3D text: labels are triangulated from the glyph outlines the canvas shim draws (128 s to 6 s in QuickJS). The score did not change with it.",
   gl3d_isosurface_math: "Wireframe antialiasing differs; surfaces and colours match. Slow: plotly computes the isosurface in plain JS loops, which an interpreter runs several times slower than Node.",
-  "gl3d_surface_opacity-and-opacityscale": "Transparency: SwiftShader blends slightly differently from Chrome's GPU path (<code>KL_ANGLE=metal</code> comes closer on a Mac).",
-  "gl3d_volume_opacityscale-iso": "Transparency: as above.",
 };
 const mjNotes = {
   table_latex_multitrace_scatter: "TeX in table cells, including eqnarray alignments; the rest is text antialiasing over many small labels.",
