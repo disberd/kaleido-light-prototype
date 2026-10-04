@@ -1,6 +1,6 @@
 // Renders plotly.js test mocks (one process, shared plotly) to <dir>/<name>.png; logs failures and timing.
 // Usage: node mocks.js [dir]   (dir holds sample.txt, one mock name per line; default out/mocks)
-// PAGE_CSS=0 renders like Plotly.toImage (no page stylesheet rules), to compare with chrome-toimage.sh references.
+// Renders like Plotly.toImage; PAGE_CSS=1 adds plotly's page stylesheet rules, to compare with chrome-ref.sh screenshots.
 const fs = require("fs");
 const { render, toPng } = require("./render.js");
 const dir = process.argv[2] || "out/mocks";
@@ -13,7 +13,7 @@ process.on("uncaughtException", (e) => console.log(`${current}: async error ${St
     const fig = JSON.parse(fs.readFileSync(`plotly-src/test/image/mocks/${n}.json`, "utf8"));
     const t0 = performance.now();
     try {
-      const svg = await Promise.race([render(fig, { pageCss: process.env.PAGE_CSS !== "0" }), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout 60s")), 60000))]);
+      const svg = await Promise.race([render(fig, { width: 700, height: 500, pageCss: process.env.PAGE_CSS === "1" }), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout 60s")), 60000))]);
       fs.writeFileSync(`${dir}/${n}.png`, toPng(svg));
       console.log(`${n}: ok ${Math.round(performance.now() - t0)} ms`);
     } catch (e) {

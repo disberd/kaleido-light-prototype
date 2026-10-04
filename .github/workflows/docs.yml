@@ -38,14 +38,14 @@ jobs:
           for f in figs/*.json; do
             n=$(basename "$f" .json)
             if [ "$n" = mathjax ]; then
-              PAGE_CSS=0 KL_BIN=out/kaleido-lite-mathjax-bin ./kaleido-lite.sh "$f" "out/$n.png" || echo "render failed: $n"
+              KL_BIN=out/kaleido-lite-mathjax-bin ./kaleido-lite.sh "$f" "out/$n.png" 700 500 || echo "render failed: $n"
             else
-              ./kaleido-lite.sh "$f" "out/$n.png" || echo "render failed: $n"
+              PAGE_CSS=1 ./kaleido-lite.sh "$f" "out/$n.png" 700 500 || echo "render failed: $n"
             fi
           done
-          ./qjs-mocks.sh out/mocks > out/mocks/run.log
-          PAGE_CSS=0 ./qjs-mocks.sh out/gl > out/gl/run.log
-          PAGE_CSS=0 KL_BIN=out/kaleido-lite-mathjax-bin ./qjs-mocks.sh out/mj > out/mj/run.log
+          PAGE_CSS=1 ./qjs-mocks.sh out/mocks > out/mocks/run.log
+          ./qjs-mocks.sh out/gl > out/gl/run.log
+          KL_BIN=out/kaleido-lite-mathjax-bin ./qjs-mocks.sh out/mj > out/mj/run.log
           cat out/gl/run.log
       - name: Chrome references
         run: |

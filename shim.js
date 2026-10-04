@@ -469,10 +469,10 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
   const resolveFamily = (list) => pickFont({ getAttribute: (k) => (k === "font-family" ? list : null) }).names.fontFamily.en;
   // Final SVG fixes for resvg: name the exact font we measured with, and nearest-neighbour heatmap upscaling
   // (plotly asks for "image-rendering: pixelated", which resvg does not know, so it would smooth).
-  // pageCss: also apply plotly's page stylesheet rules (crisp axes, link colour), as on screen. Plotly.toImage and
-  // Kaleido rasterize the bare SVG and skip them.
+  // pageCss: also apply plotly's page stylesheet rules (crisp axes, link colour), as on screen. Off by default:
+  // Plotly.toImage and Kaleido rasterize the bare SVG and skip them.
   // Embedded images (megabytes of base64 for WebGL canvases) stay out of the DOM pass and the regexes.
-  const finishSVG = (svg, { pageCss = true } = {}) => {
+  const finishSVG = (svg, { pageCss = false } = {}) => {
     const uris = [];
     svg = svg.replace(/"data:[^"]*"/g, (u) => `"kl-uri:${uris.push(u) - 1}"`);
     return lowerCssText(svg, pageCss)
@@ -774,4 +774,17 @@ function settle3D(gd) {
   for (const k in gd._fullLayout) gd._fullLayout[k]?._scene?.glplot?.camera?.view?.flush?.(Infinity);
 }
 
-module.exports = { installShim, MAC_FONTS, png, jsPngDataURL, patchPlotly, settle3D };
+// Image size and plot config as Kaleido gives them: width/height from the options, else the layout, else its template,
+// else 700x500 (kaleido's coerce_for_js); WebGL drawn at twice the scale unless the figure's config says otherwise.
+function exportOpts(fig, { width, height, scale } = {}) {
+  const l = fig.layout || {}, t = l.template?.layout || {};
+  scale = +scale || 1;
+  return {
+    width: +width || l.width || t.width || 700,
+    height: +height || l.height || t.height || 500,
+    scale,
+    config: { plotGlPixelRatio: scale * 2, ...fig.config, staticPlot: true },
+  };
+}
+
+module.exports = { installShim, MAC_FONTS, png, jsPngDataURL, patchPlotly, settle3D, exportOpts };

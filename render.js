@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { parseHTML } = require("linkedom");
 const { Resvg } = require("@resvg/resvg-js");
-const { installShim, MAC_FONTS, patchPlotly, settle3D } = require("./shim.js");
+const { installShim, MAC_FONTS, patchPlotly, settle3D, exportOpts } = require("./shim.js");
 
 const SUP = "/System/Library/Fonts/Supplemental/";
 const FONT_FILES = MAC_FONTS;
@@ -48,12 +48,13 @@ const Plotly = (() => {
 })();
 const tLoad = performance.now() - t0;
 
-async function render(fig, { width = 700, height = 500, scale = 1, pageCss = true } = {}) {
+async function render(fig, { pageCss = false, ...opts } = {}) {
+  const { width, height, scale, config } = exportOpts(fig, opts);
   const gd = document.createElement("div");
   gd.setAttribute("style", `width:${width}px;height:${height}px`);
   document.body.appendChild(gd);
   const layout = { ...fig.layout, width, height };
-  await Plotly.newPlot(gd, fig.data, layout, { ...fig.config, staticPlot: true });
+  await Plotly.newPlot(gd, fig.data, layout, config);
   // Listeners get PLOT and Plotly in scope, like in the package's plain adapter (lib/container.js).
   const fn = (src) => new Function("PLOT", "Plotly", "return (" + src + ")")(gd, Plotly);
   for (const [ev, srcs] of Object.entries(fig.plotly_listeners || {})) for (const s of srcs) gd.on(ev, fn(s));
@@ -67,13 +68,13 @@ async function render(fig, { width = 700, height = 500, scale = 1, pageCss = tru
   return svg;
 }
 
-const snapshot = (gd, scale = 1, pageCss = true) => (settle3D(gd), finishSVG(Plotly.Snapshot.toSVG(gd, "svg", scale), { pageCss }));
+const snapshot = (gd, scale = 1, pageCss = false) => (settle3D(gd), finishSVG(Plotly.Snapshot.toSVG(gd, "svg", scale), { pageCss }));
 const toPng = (svg) => new Resvg(svg, { font: { fontFiles: fontPaths, loadSystemFonts: false, defaultFontFamily: "Arial" } }).render().asPng();
 
 async function main() {
   const [figPath, out, w, h, s] = process.argv.slice(2);
   const fig = JSON.parse(fs.readFileSync(figPath, "utf8"));
-  const opts = { width: +w || 700, height: +h || 500, scale: +s || 1 };
+  const opts = { width: w, height: h, scale: s, pageCss: process.env.PAGE_CSS === "1" };
   t0 = performance.now();
   const svg = await render(fig, opts);
   const tPlot = performance.now() - t0;

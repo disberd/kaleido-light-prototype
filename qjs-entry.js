@@ -27,7 +27,7 @@ globalThis.TextDecoder ??= class TextDecoder {
 };
 const t0 = Date.now();
 const { parseHTML } = require("linkedom");
-const { installShim, MAC_FONTS, patchPlotly, settle3D } = require("./shim.js");
+const { installShim, MAC_FONTS, patchPlotly, settle3D, exportOpts } = require("./shim.js");
 const SUP = "/System/Library/Fonts/Supplemental/";
 function readBin(p) {
   const f = std.open(p, "rb");
@@ -104,16 +104,19 @@ const t1 = Date.now();
 const Plotly = plotlyArg ? loadPlotly(plotlyArg) : require("plotly.js-dist-min");
 const t2 = Date.now();
 const fig = JSON.parse(std.loadFile(figPath));
-const width = +w || 700, height = +h || 500;
+const { width, height, scale, config } = exportOpts(fig, { width: w, height: h, scale: s });
 const gd = document.createElement("div");
 gd.setAttribute("style", `width:${width}px;height:${height}px`);
 document.body.appendChild(gd);
-Plotly.newPlot(gd, fig.data, { ...fig.layout, width, height }, { ...fig.config, staticPlot: true }).then(() => {
+Plotly.newPlot(gd, fig.data, { ...fig.layout, width, height }, config).then(() => {
   settle3D(gd);
-  const svg = finishSVG(Plotly.Snapshot.toSVG(gd, "svg", +s || 1), { pageCss: std.getenv("PAGE_CSS") !== "0" });
+  const svg = finishSVG(Plotly.Snapshot.toSVG(gd, "svg", scale), { pageCss: std.getenv("PAGE_CSS") === "1" });
   const f = std.open(out, "w");
   f.puts(svg);
   f.close();
   std.err.puts(`setup ${t1 - t0} ms, plotly load ${t2 - t1} ms, plot+svg ${Date.now() - t2} ms -> ${out}\n`);
-}, (e) => std.err.puts(e + "\n" + e.stack + "\n"));
+}).catch((e) => {
+  std.err.puts(e + "\n" + e.stack + "\n");
+  std.exit(1);
+});
 

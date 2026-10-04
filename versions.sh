@@ -10,10 +10,10 @@ for v in "$@"; do
   for d in mocks gl; do
     o=out/versions/$v/$d; mkdir -p "$o"; cp "out/$d/sample.txt" "$o/"
     if [ $d = gl ]; then
-      PAGE_CSS=0 ./qjs-mocks.sh "$o" --plotly "$f" > "$o/run.log"
+      ./qjs-mocks.sh "$o" --plotly "$f" > "$o/run.log"
       while read -r n; do PLOTLY=$f ./chrome-toimage.sh "$M/$n.json" "$o/$n.chrome.png" || true; done < "$o/sample.txt"
     else
-      ./qjs-mocks.sh "$o" --plotly "$f" > "$o/run.log"
+      PAGE_CSS=1 ./qjs-mocks.sh "$o" --plotly "$f" > "$o/run.log"
       while read -r n; do PLOTLY=$f ./chrome-ref.sh "$M/$n.json" "$o/$n.chrome.png"; done < "$o/sample.txt"
     fi
     OUT=$o xargs node compare.js < "$o/sample.txt" > "$o/scores.txt"

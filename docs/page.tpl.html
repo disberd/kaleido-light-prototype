@@ -113,7 +113,7 @@ footer { color: var(--muted); font-size: 0.9rem; }
         <li><strong>Renders:</strong> scatter, bar, box, violin, contour, heatmap, image, pie, sunburst, treemap, funnel, waterfall, candlestick, polar, ternary, sankey, table, indicator, geo, and the WebGL traces: scattergl, splom, parcoords and all 3D traces.</li>
         <li><strong>Does not render:</strong> map subplots (MapLibre needs WebGL 2).</li>
         <li><strong>Pixel differences</strong> count pixels whose RGB distance from Chrome exceeds 60. Below about 2% it is text antialiasing (resvg against Skia).</li>
-        <li><strong>Two Chrome references.</strong> 2D figures are compared with a screenshot of the plot on screen, and the binary applies the two rules of plotly's page stylesheet that change pixels. WebGL and MathJax figures are compared with <code>Plotly.toImage</code> in Chrome (the screenshot misses 3D scenes), which, like Kaleido, rasterizes the bare SVG; the binary then skips those rules too (<code>PAGE_CSS=0</code>).</li>
+        <li><strong>Two Chrome references.</strong> 2D figures are compared with a screenshot of the plot on screen, and the binary applies the two rules of plotly's page stylesheet that change pixels (<code>PAGE_CSS=1</code>). WebGL and MathJax figures are compared with <code>Plotly.toImage</code> in Chrome (the screenshot misses 3D scenes), which, like Kaleido, rasterizes the bare SVG; so does the binary by default.</li>
         <li>Times are wall-clock seconds for one process per figure, start to PNG, on this runner.</li>
       </ul>
     </div>

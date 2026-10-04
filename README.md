@@ -59,9 +59,9 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
 - WebGL in Node: `render.js` loads headless-gl (npm `gl`) when installed and the shim hands its WebGL 1
   context to plotly; plotly reads it back into the SVG as `<image>`s (2D traces through `toDataURL`, 3D scenes
   through `readPixels`). 3D axis text needs canvas `fillText`, which the shim rasterizes from opentype outlines.
-- `render(fig, { pageCss })`: `true` (default) also applies the two rules of plotly's page stylesheet that change
-  pixels (`.crisp` axis lines, link colour), like the plot on screen. `false` matches `Plotly.toImage` and Kaleido,
-  which rasterize the bare SVG. `PAGE_CSS=0 node mocks.js dir` does the same for a mock run.
+- `render(fig, { pageCss })`: `true` also applies the two rules of plotly's page stylesheet that change
+  pixels (`.crisp` axis lines, link colour), like the plot on screen. `false` (default) matches `Plotly.toImage` and
+  Kaleido, which rasterize the bare SVG. `PAGE_CSS=1` turns it on for `mocks.js`, `render.js` and the binary.
 - Checks: `chrome-ref.sh` (screenshot of the plot in headless Chrome), `chrome-toimage.sh` (`Plotly.toImage`
   PNG from headless Chrome with GPU WebGL; use it for WebGL figures, the screenshot misses 3D scenes),
   `chrome-dom.sh` (Chrome's plot DOM, to compare coordinates), `compare.js` (side by side image and share of

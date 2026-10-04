@@ -8,7 +8,8 @@ assert(Math.abs(quarter - (Math.PI * 100) / 2) < 0.5, quarter);
 assert.deepStrictEqual(path("M0 0 Q 50 0 100 0").getPointAtLength(25), { x: 25, y: 0 });
 
 const out = finishSVG(`<svg xmlns="http://www.w3.org/2000/svg"><g class="crisp"></g>` +
-  `<text style="font-size:10px;text-transform:capitalize;font-variant:small-caps;text-shadow:1px 1px 1px white;text-decoration-line:underline">foo bar</text></svg>`);
+  `<text style="font-size:10px;text-transform:capitalize;font-variant:small-caps;text-shadow:1px 1px 1px white;text-decoration-line:underline">foo bar</text></svg>`, { pageCss: true });
+assert(!finishSVG(`<svg xmlns="http://www.w3.org/2000/svg"><g class="crisp"></g></svg>`).includes("crispEdges")); // off by default, as Kaleido
 assert(out.includes(">F</tspan>") === false && out.includes("F<tspan") && out.includes('style="font-size:7px">OO</tspan>'), out);
 assert(out.includes("text-decoration:underline") && /filter="url\(#kl-ts0\)"/.test(out) && out.includes("<feOffset dx=\"1\" dy=\"1\""), out);
 assert(out.includes("shape-rendering:crispEdges") && !/text-transform|font-variant|text-shadow/.test(out), out);
