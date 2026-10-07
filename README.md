@@ -35,7 +35,8 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
   `out/versions/`.
 - `native/`: `webgl.c` is the `qjs:webgl` module, headless-gl's native layer ported to the QuickJS C API (same
   131 methods), on ANGLE loaded at run time from the binary's directory (`KL_ANGLE_DIR` overrides). It also
-  encodes canvas PNGs (`pngDataURL`, deflated with the vendored `stb_image_write.h`). `build.sh` builds `kl-qjs`,
+  encodes canvas PNGs (`pngDataURL`, deflated with the vendored `stb_image_write.h`). `fixPixels` does what plotly does in JS
+  to a GL readback (row flip, un-premultiply; ~1 s per 3D scene in QuickJS), hooked by `patchPlotly`. `build.sh` builds `kl-qjs`,
   quickjs-ng 0.17.0's `qjs` with that module built in. `include/` holds the Khronos/ANGLE headers.
   `gl-constants.json` holds the GL constants dumped from headless-gl's Node build. `node native/selftest.js`
   checks a clear/readback and the PNG encoder against shim.js's.
@@ -269,6 +270,19 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 - PDF against Kaleido 1.4.0 itself: page 525x375 pt for 700x500 px (Kaleido 525.12x375.12), text as text with
   a font subset embedded, WebGL as images. Kaleido prints with 0.1 in margins, so its figure sits in a transparent
   border, shrunk about 3%; `kl-raster` fills the page.
+
+## Results, QuickJS speed (2026-10-07)
+
+- Where the time goes (stage timers in the binary; `node --jitless` profiles as a stand-in for QuickJS, which has
+  none): bigscatter (20k markers) spent 4.1 of 10 s in `finishSVG`, re-parsing the whole SVG with linkedom because
+  every figure with axes has `crisp`; that only matters with `pageCss`, so without it the SVG is no longer parsed.
+  Every 3D scene spent ~1 s in plotly's `flipPixels` + `correctRGB` (per-byte loops over the readback, 70x slower
+  than in a JIT): `patchPlotly` now hands them to `fixPixels` in C (same bytes; 1.58.5 to 4.1.1 matched).
+- 41 figures (hand-made, five surface mocks, the WebGL sample): 121.3 -> 103.7 s; bigscatter 9.6 -> 6.0 s, 3D
+  scenes 6-46% faster, gl2d and splom unchanged. Rasterized, 40 of 41 are pixel-identical to before; the other,
+  gl3d_bunny-hull, differs from run to run already.
+- Left: surfaces stay slow (contour_precision 9.3 s, ~10x a JIT): most of it is plotly's own mesh and contour
+  maths (gl-surface3d `update`, `surfaceNets`), only faster as native ports or under a JIT.
 
 ## Known gaps
 

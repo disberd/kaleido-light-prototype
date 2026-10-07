@@ -1,13 +1,13 @@
 // node native/selftest.js: checks native/webgl.c through native/kl-qjs, with ANGLE from ../angle. A GL context
 // clears and reads back, compiles a shader only WebGL rules accept (plotly's), renders to an RGBA/FLOAT texture
-// (gl-plot3d's transparency pass), and pngDataURL decodes to the same pixels as shim.js's jsPngDataURL.
+// (gl-plot3d's transparency pass), pngDataURL decodes to the same pixels as shim.js's jsPngDataURL, and fixPixels matches jsFixPixels.
 const { execFileSync } = require("child_process");
 const zlib = require("zlib");
 const assert = require("assert");
-const { jsPngDataURL } = require("../shim.js");
+const { jsPngDataURL, jsFixPixels } = require("../shim.js");
 const cases = [[1, 1], [3, 2], [200, 120]].flatMap(([w, h]) => [false, true].flatMap((flip) => [false, true].map((pre) => ({ w, h, flip, pre }))));
 const pixels = `(w, h) => new Uint8Array(4 * w * h).map((_, i) => (i * 37 + (i >> 2) * 11) & 255)`;
-const script = `import("qjs:webgl").then(({ pngDataURL, WebGLRenderingContext: W }) => {
+const script = `import("qjs:webgl").then(({ pngDataURL, fixPixels, WebGLRenderingContext: W }) => {
   const gl = new W(2, 2, true, true, false, false, true, true, false, false), px = new Uint8Array(16);
   gl.clearColor(1, 0.5, 0, 1); gl.clear(0x4000); gl.readPixels(0, 0, 2, 2, 0x1908, 0x1401, px);
   const sh = gl.createShader(0x8B31); // a global initialized from a uniform: an error in plain GLSL ES 1.00
@@ -18,9 +18,10 @@ const script = `import("qjs:webgl").then(({ pngDataURL, WebGLRenderingContext: W
   gl.bindFramebuffer(0x8D40, gl.createFramebuffer()); gl.framebufferTexture2D(0x8D40, 0x8CE0, 0x0DE1, tex, 0);
   const P = ${pixels};
   print(JSON.stringify({ renderer: gl.getParameter(0x1F01), clear: [...px], shader: gl.getShaderParameter(sh, 0x8B81),
-    floatFbo: gl.checkFramebufferStatus(0x8D40), urls: ${JSON.stringify(cases)}.map((c) => pngDataURL(c.w, c.h, P(c.w, c.h), c.flip, c.pre)) }));
+    floatFbo: gl.checkFramebufferStatus(0x8D40), urls: ${JSON.stringify(cases)}.map((c) => pngDataURL(c.w, c.h, P(c.w, c.h), c.flip, c.pre)),
+    fixed: ${JSON.stringify(cases)}.map((c) => { const p = P(c.w, c.h); fixPixels(p, c.w, c.h, c.pre); return [...p]; }) }));
 }, (e) => { print(e); std.exit(1); })`;
-const out = JSON.parse(execFileSync(__dirname + "/kl-qjs", ["--std", "-e", script], { env: { ...process.env, KL_ANGLE_DIR: __dirname + "/../angle" } }));
+const out = JSON.parse(execFileSync(__dirname + "/kl-qjs", ["--std", "-e", script], { maxBuffer: 1 << 26, env: { ...process.env, KL_ANGLE_DIR: __dirname + "/../angle" } }));
 assert.deepStrictEqual(out.clear, [255, 128, 0, 255, 255, 128, 0, 255, 255, 128, 0, 255, 255, 128, 0, 255], "clear/readPixels");
 assert.strictEqual(out.shader, 1, "WebGL shader rules (EGL_CONTEXT_WEBGL_COMPATIBILITY_ANGLE)");
 assert.strictEqual(out.floatFbo, 0x8cd5, "RGBA/FLOAT texture is color-renderable");
@@ -39,4 +40,5 @@ const decode = (url) => {
 };
 const P = eval(pixels);
 cases.forEach((c, i) => assert.deepStrictEqual(decode(out.urls[i]), decode(jsPngDataURL(c.w, c.h, P(c.w, c.h), c.flip, c.pre)), JSON.stringify(c)));
+cases.forEach((c, i) => { const p = P(c.w, c.h); jsFixPixels(p, c.w, c.h, c.pre); assert.deepStrictEqual(out.fixed[i], [...p], "fixPixels " + JSON.stringify(c)); });
 console.log(`native selftest ok (${cases.length} PNG cases) on ${out.renderer}`);

@@ -15,7 +15,7 @@ const DEFAULTS = { display: "block", "font-size": "16px", "font-family": "sans-s
 // fontFiles: { family: { normal, bold, italic, bolditalic } } of ArrayBuffers. Family names lower case.
 // readFile(url) -> string | null serves XMLHttpRequest (geo topojson); there is no network.
 // createWebGL(width, height, attrs) -> WebGL 1 context (headless-gl in Node); without it WebGL traces stay blank.
-function installShim(window, fontFiles, { defaultFamily = "arial", readFile = () => null, createWebGL = null, pngDataURL = jsPngDataURL } = {}) {
+function installShim(window, fontFiles, { defaultFamily = "arial", readFile = () => null, createWebGL = null, pngDataURL = jsPngDataURL, fixPixels = jsFixPixels } = {}) {
   // Parse a font file on first use: parsing all of them costs ~300 ms per process in QuickJS.
   const fonts = {};
   for (const [fam, vs] of Object.entries(fontFiles)) {
@@ -374,6 +374,8 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
   window.location ??= { href: "about:blank", protocol: "about:", host: "", hostname: "", origin: "null", pathname: "blank", search: "", hash: "" };
   // 3D text: vectorize-text's processPixels, hooked by patchPlotly, asks for triangles from the drawn outlines.
   globalThis.__klText = vectorizeOutlines;
+  // GL readbacks: what plotly does to them in JS (row flip, un-premultiply), hooked by patchPlotly.
+  globalThis.__klPixels = fixPixels;
   // Heatmap and image traces paint pixels on a canvas and embed it as a PNG <image>. ponytail: only the calls
   // they make; fillStyle understands rgb()/rgba() only (not hsl image color models), drawImage of a URL is a no-op.
   // WebGL comes from createWebGL; plotly reads it back through toDataURL (2D traces) or readPixels (3D scenes).
@@ -499,9 +501,10 @@ function installShim(window, fontFiles, { defaultFamily = "arial", readFile = ()
   // CSS that resvg ignores, rewritten as plain SVG: text-transform and small caps go into the text itself,
   // text-decoration-line becomes SVG text-decoration, text-shadow becomes a filter. Two rules of plotly's page
   // stylesheet (Chrome applies them; the exported SVG doesn't carry the sheet): crisp axis lines and link colour.
-  const CSS_TEXT = /text-transform|font-variant|text-shadow|text-decoration-line|<a[\s>]|crisp/;
+  // Every figure with axes has "crisp": without pageCss it alone must not cost a re-parse (4 s for 20k markers).
+  const CSS_TEXT = /text-transform|font-variant|text-shadow|text-decoration-line/, PAGE_CSS = /<a[\s>]|crisp/;
   function lowerCssText(svg, pageCss) {
-    if (!CSS_TEXT.test(svg)) return svg;
+    if (!CSS_TEXT.test(svg) && !(pageCss && PAGE_CSS.test(svg))) return svg;
     const doc = new window.DOMParser().parseFromString(svg, "image/svg+xml");
     const root = doc.documentElement;
     const setStyle = (el, k, v) => {
@@ -674,6 +677,21 @@ function jsPngDataURL(w, h, rgba, flip, unpremultiply) {
   return "data:image/png;base64," + btoa(bin);
 }
 
+// plotly's flipPixels and correctRGB (gl-plot3d, MIT) after a GL readback: rows bottom-up to top-down and, with
+// correct, premultiplied alpha undone the way a Uint8Array store does it (truncated). In place.
+function jsFixPixels(px, w, h, correct) {
+  const row = 4 * w, tmp = new Uint8Array(row);
+  for (let i = 0, j = h - 1; i < j; i++, j--) {
+    tmp.set(px.subarray(i * row, i * row + row));
+    px.copyWithin(i * row, j * row, j * row + row);
+    px.set(tmp, j * row);
+  }
+  if (correct) for (let k = 0; k < px.length; k += 4) {
+    const a = px[k + 3];
+    if (a > 0) for (let q = 255 / a, l = 0; l < 3; l++) px[k + l] = Math.min(q * px[k + l], 255);
+  }
+}
+
 // Minimal PNG encoder: RGBA rows in zlib "stored" blocks, so no deflate implementation is needed.
 // ponytail: ~4 bytes per canvas pixel end up in the SVG; add real deflate if heatmap exports get too big.
 const CRC = Array.from({ length: 256 }, (_, n) => {
@@ -756,11 +774,25 @@ function textPositions(pts, options, size) {
   return pts.map((p) => [scale * (p[0] + dx), scale * (p[1] + dy)]);
 }
 
-// The one source patch, for any plotly.js bundle (1.x to 4.x, minified or not): vectorize-text's processPixels
+// The source patches, for any plotly.js bundle (1.x to 4.x, minified or not): vectorize-text's processPixels
 // (pixels, options, size) first asks globalThis.__klText. Found by the shape of its body (two tries of the
 // implementation, with true then false), since minifiers rename everything. Unmatched, 3D text is traced as before.
 const PROCESS_PIXELS = /function\s+[\w$]+\s*\(\s*([\w$]+)\s*,\s*([\w$]+)\s*,\s*([\w$]+)\s*\)\s*\{(?=\s*try\s*\{\s*return\s+([\w$]+)\s*\(\s*\1\s*,\s*\2\s*,\s*\3\s*,\s*(?:!0|true)\s*\)\s*;?\s*\}\s*catch\s*\(\s*[\w$]+\s*\)\s*\{\s*\}\s*try\s*\{\s*return\s+\4\s*\(\s*\1\s*,\s*\2\s*,\s*\3\s*,\s*(?:!1|false)\s*\))/;
+// Also, per JS loops over every pixel being ~70x slower in QuickJS than in a JIT (~1 s per 3D scene): what plotly
+// runs between a full readPixels and the 2D canvas it copies into becomes one __klPixels call. That is gl3d's
+// flipPixels + correctRGB (named functions in 3.x+, inline in 1.x-2.x) and 1.x-2.x gl2d's inline flip; told apart
+// by their bodies (a "--" row swap, a "255/" un-premultiply). Anything else in between: left alone.
+const READBACK = /(readPixels\(\s*0\s*,\s*0\s*,\s*([\w$]+)\s*,\s*([\w$]+)\s*,\s*[\w$]+\.RGBA\s*,\s*[\w$]+\.UNSIGNED_BYTE\s*,\s*([\w$]+)\s*\))((?:(?!readPixels)[^]){1,600}?[;}])(\s*var\s+[\w$]+\s*=\s*document\.createElement\(\s*"canvas"\s*\))/g;
 function patchPlotly(src) {
+  const body = (name) => (src.match(new RegExp(`function\\s+${name.replace(/\$/g, "\\$")}\\s*\\([^)]*\\)\\s*\\{[^]{0,300}`)) || [""])[0];
+  src = src.replace(READBACK, (all, call, w, h, px, mid, tail) => {
+    const args = `\\(\\s*${px.replace(/\$/g, "\\$")}\\s*,\\s*${w}\\s*,\\s*${h}\\s*\\)`;
+    const named = [...mid.matchAll(new RegExp(`([\\w$]+)\\s*${args}`, "g"))].map((m) => m[1]);
+    // named: only calls on (pixels, w, h) in between; inline: function expressions or loops
+    const code = named.length && !mid.replace(new RegExp(`[\\w$]+\\s*${args}`, "g"), "").replace(/[\s,;]/g, "") ? named.map(body).join("") : mid;
+    if (!/--/.test(code) || (named.length && code === mid)) return all;
+    return `${call};globalThis.__klPixels(${px},${w},${h},${/255\s*\//.test(code)});${tail}`;
+  });
   const m = PROCESS_PIXELS.exec(src);
   if (!m) return { src, patched: false };
   const hook = `var __kl=globalThis.__klText&&globalThis.__klText(${m[1]},${m[2]},${m[3]});if(__kl)return __kl;`;
@@ -787,4 +819,4 @@ function exportOpts(fig, { width, height, scale } = {}) {
   };
 }
 
-module.exports = { installShim, MAC_FONTS, png, jsPngDataURL, patchPlotly, settle3D, exportOpts };
+module.exports = { installShim, MAC_FONTS, png, jsPngDataURL, jsFixPixels, patchPlotly, settle3D, exportOpts };

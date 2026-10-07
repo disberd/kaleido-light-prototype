@@ -3,7 +3,7 @@
 import * as std from "qjs:std";
 import * as os from "qjs:os";
 import * as bjson from "qjs:bjson";
-import { pngDataURL } from "qjs:webgl";
+import { pngDataURL, fixPixels } from "qjs:webgl";
 globalThis.setTimeout ??= os.setTimeout;
 globalThis.clearTimeout ??= os.clearTimeout;
 // Plotly.Lib.warn logs through console.trace, which QuickJS lacks.
@@ -46,7 +46,7 @@ const createWebGL = require("gl/src/javascript/node-index.js");
 // Geo topojson from topojson/ next to the binary, by file name (plotly's default topojsonURL is a CDN).
 const exeDir = os.exePath().replace(/[\\/][^\\/]*$/, "");
 const readFile = (url) => std.loadFile(`${exeDir}/topojson/${url.split("/").pop()}`);
-const { finishSVG } = installShim(window, fonts, { createWebGL, pngDataURL, readFile });
+const { finishSVG } = installShim(window, fonts, { createWebGL, pngDataURL, fixPixels, readFile });
 globalThis.window = globalThis.self = window;
 for (const k of ["document", "Element", "HTMLElement", "SVGElement", "Node", "DOMParser", "XMLSerializer", "XMLHttpRequest", "HTMLCanvasElement", "Image", "getComputedStyle", "requestAnimationFrame", "cancelAnimationFrame", "matchMedia"]) globalThis[k] = window[k];
 

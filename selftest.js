@@ -27,4 +27,19 @@ for (const src of ["function h(t,e,r){try{return f(t,e,r,!0)}catch(t){}try{retur
   assert(r.patched && r.src.includes(`globalThis.__klText(${args});if(__kl)return __kl;`), r.src);
 }
 assert(!patchPlotly("function h(t,e,r){return 1}").patched);
+// GL readback loops: jsFixPixels matches plotly's flipPixels + correctRGB byte for byte, and the patch finds them
+// in both shapes (named, as 3.x+ minified; inline, as 1.x-2.x) and leaves other code between alone.
+const { jsFixPixels } = require("./shim.js");
+const flip = "function F(t,e,r){for(var n=0,i=r-1;n<i;++n,--i)for(var a=0;a<e;++a)for(var o=0;o<4;++o){var s=4*(e*n+a)+o,l=4*(e*i+a)+o,c=t[s];t[s]=t[l],t[l]=c}}";
+const corr = "function C(t,e,r){for(var n=0;n<r;++n)for(var i=0;i<e;++i){var a=4*(e*n+i),o=t[a+3];if(o>0)for(var s=255/o,l=0;l<3;++l)t[a+l]=Math.min(s*t[a+l],255)}}";
+const [F, C] = new Function(`${flip}${corr}return [F, C]`)();
+for (const [w, h] of [[1, 1], [3, 2], [7, 5]]) {
+  const a = new Uint8Array(4 * w * h).map((_, i) => (i * 37 + (i >> 2) * 11) & 255), b = a.slice();
+  F(a, w, h), C(a, w, h), jsFixPixels(b, w, h, true);
+  assert.deepStrictEqual(b, a, `${w}x${h}`);
+}
+const rp = (tail) => `x.readPixels(0,0,w,h,x.RGBA,x.UNSIGNED_BYTE,p)${tail};var c=document.createElement("canvas")`;
+assert(patchPlotly(flip + corr + rp(",F(p,w,h),C(p,w,h)")).src.includes(";globalThis.__klPixels(p,w,h,true);"));
+assert(patchPlotly(rp(`,${flip.replace("function F", "function")}(p,w,h)`)).src.includes(";globalThis.__klPixels(p,w,h,false);"));
+assert(!patchPlotly(flip + rp(",F(p,w,h),G(p)")).src.includes("__klPixels")); // something else in between
 console.log("selftest ok");

@@ -648,6 +648,31 @@ static JSValue js_png_data_url(JSContext *ctx, JSValueConst this_val, int argc, 
   return r;
 }
 
+// shim.js's jsFixPixels (plotly's flipPixels + correctRGB) in C, in place: QuickJS takes ~1 s for those per-byte
+// loops on a 3D scene's readback. correct: un-premultiply truncated, like plotly's Uint8Array store.
+static JSValue js_fix_pixels(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+  size_t n;
+  uint8_t *px = bytes(ctx, argv[0], &n);
+  int32_t w = I(1), h = I(2);
+  int correct = JS_ToBool(ctx, argv[3]);
+  size_t row = 4 * (size_t)w;
+  if (w <= 0 || h <= 0 || !px || n < row * h) return JS_ThrowTypeError(ctx, "fixPixels: need %d x %d RGBA pixels", w, h);
+  uint8_t *tmp = malloc(row);
+  for (int32_t i = 0, j = h - 1; i < j; i++, j--) {
+    memcpy(tmp, px + row * i, row);
+    memcpy(px + row * i, px + row * j, row);
+    memcpy(px + row * j, tmp, row);
+  }
+  free(tmp);
+  if (correct) for (size_t k = 0; k < row * h; k += 4) {
+    uint8_t a = px[k + 3];
+    if (!a) continue;
+    double q = 255.0 / a;
+    for (int l = 0; l < 3; l++) { double v = q * px[k + l]; px[k + l] = (uint8_t)(v < 255 ? v : 255); }
+  }
+  return JS_UNDEFINED;
+}
+
 #define ENTRY(name, n, call) JS_CFUNC_DEF(#name, n, m_##name),
 #define E(name, n) JS_CFUNC_DEF(#name, n, m_##name),
 static const JSCFunctionListEntry proto_funcs[] = {
@@ -678,6 +703,7 @@ static int webgl_init(JSContext *ctx, JSModuleDef *m) {
   JS_SetModuleExport(ctx, m, "setError", JS_NewCFunction(ctx, m_setError, "setError", 1));
   JS_SetModuleExport(ctx, m, "cleanup", JS_NewCFunction(ctx, cleanup, "cleanup", 0));
   JS_SetModuleExport(ctx, m, "pngDataURL", JS_NewCFunction(ctx, js_png_data_url, "pngDataURL", 5));
+  JS_SetModuleExport(ctx, m, "fixPixels", JS_NewCFunction(ctx, js_fix_pixels, "fixPixels", 4));
   return 0;
 }
 
@@ -688,5 +714,6 @@ JSModuleDef *js_init_module_webgl(JSContext *ctx, const char *name) {
   JS_AddModuleExport(ctx, m, "setError");
   JS_AddModuleExport(ctx, m, "cleanup");
   JS_AddModuleExport(ctx, m, "pngDataURL");
+  JS_AddModuleExport(ctx, m, "fixPixels");
   return m;
 }
