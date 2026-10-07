@@ -1,0 +1,16 @@
+[package]
+name = "kl-raster"
+version = "0.1.0"
+edition = "2021"
+
+# resvg 0.48.1 as the CLI it replaces, so PNGs stay identical; svg2pdf brings its own usvg (0.45).
+[dependencies]
+resvg = "=0.48.1"
+svg2pdf = "0.13"
+jpeg-encoder = "0.7"
+
+[profile.release]
+opt-level = 3
+lto = true
+# stripped by build.sh: rust-objcopy aborts on macOS
+codegen-units = 1

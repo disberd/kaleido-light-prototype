@@ -100,7 +100,7 @@ footer { color: var(--muted); font-size: 0.9rem; }
       <table>
         <thead><tr><th></th><th>kaleido-lite</th><th>Kaleido 0.2.1</th></tr></thead>
         <tbody>
-          <tr><td>Size on disk</td><td>{{SIZE_BIN}} binary + {{SIZE_ANGLE}} ANGLE with SwiftShader + {{SIZE_RESVG}} resvg ({{SIZE_MJ}} binary with MathJax)</td><td>256 MB</td></tr>
+          <tr><td>Size on disk</td><td>{{SIZE_BIN}} binary + {{SIZE_ANGLE}} ANGLE with SwiftShader + {{SIZE_RASTER}} kl-raster (resvg, svg2pdf) ({{SIZE_MJ}} binary with MathJax)</td><td>256 MB</td></tr>
           <tr><td>Cold process, figure to PNG (this runner)</td><td>2D median {{T2D}} s · WebGL median {{TGL}} s</td><td>4.3 s start, then ~37 ms per figure (measured on a Mac)</td></tr>
           <tr><td>plotly.js test mocks, 2D ({{N}} of the 859 without WebGL, maps or MathJax)</td><td>{{OK}}/{{N}} render · median {{MEDIAN}}% px differ · {{WITHIN2}}/{{N}} within 2% · {{WITHIN3}}/{{N}} within 3%</td><td>n/a</td></tr>
           <tr><td>plotly.js test mocks, WebGL ({{GLN}}: scattergl, splom, parcoords, 3D)</td><td>{{GLOK}}/{{GLN}} render · median {{GLMEDIAN}}% px differ · {{GLWITHIN2}}/{{GLN}} within 2%</td><td>n/a</td></tr>
@@ -186,7 +186,7 @@ footer { color: var(--muted); font-size: 0.9rem; }
     </ul>
   </section>
 
-  <footer>Source and details: <a href="{{REPO}}">{{REPO}}</a>. plotly.js 4.1.1, quickjs-ng 0.17.0, resvg 0.48.1, ANGLE and SwiftShader from Chromium 148, MathJax 3.2.2.</footer>
+  <footer>Source and details: <a href="{{REPO}}">{{REPO}}</a>. plotly.js 4.1.1, quickjs-ng 0.17.0, resvg 0.48.1, svg2pdf 0.13, ANGLE and SwiftShader from Chromium 148, MathJax 3.2.2.</footer>
 </main>
 </body>
 </html>

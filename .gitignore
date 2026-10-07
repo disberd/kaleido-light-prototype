@@ -13,3 +13,4 @@ native/kl-qjs.c
 !/out/*/
 !/out/*/sample.txt
 _site/
+/raster/target/

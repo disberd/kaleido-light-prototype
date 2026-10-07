@@ -30,6 +30,7 @@ jobs:
           ./fetch-deps.sh
           npm ci --ignore-scripts --no-audit --no-fund
           native/build.sh
+          raster/build.sh
           bun build-qjs.js
           bun build-qjs.js --mathjax
           node native/selftest.js
@@ -68,7 +69,7 @@ jobs:
           name: out
           path: |
             out
-            bin/resvg
+            bin/kl-raster
             !out/topojson
             !out/*.mjs
 
@@ -90,6 +91,7 @@ jobs:
           ./fetch-deps.sh
           npm ci --ignore-scripts --no-audit --no-fund
           native/build.sh
+          raster/build.sh
           bun build-qjs.js
       - name: plotly.js ${{ matrix.release }} against Chrome with ${{ matrix.release }}
         run: ./versions.sh ${{ matrix.release }}

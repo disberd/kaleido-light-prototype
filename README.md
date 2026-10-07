@@ -11,8 +11,8 @@ https://disberd.github.io/kaleido-light-prototype/ (built by `.github/workflows/
 
 ## Setup (macOS arm64)
 
-`./fetch-deps.sh` (ANGLE, resvg, plotly.js mocks), `npm install --ignore-scripts`, headless-gl as below (Node
-WebGL only), then `native/build.sh` and `bun build-qjs.js` for the standalone binary. `listeners.js` reads
+`./fetch-deps.sh` (ANGLE, plotly.js mocks), `npm install --ignore-scripts`, headless-gl as below (Node
+WebGL only), then `native/build.sh`, `raster/build.sh` (needs cargo) and `bun build-qjs.js` for the standalone binary. `listeners.js` reads
 PlotlyBaseExtras' `lib/*.js` from `../../lib`, so it needs this repo at `PlotlyBaseExtras/.scratch/kaleido-lite`.
 Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with the `chrome-*.sh` scripts.
 
@@ -52,7 +52,10 @@ Chrome references (`out/**/*.chrome.png`) are not in git: regenerate them with t
 - `docs/`: `build.js` makes the results page from `out/` (renders, references, `scores.txt`, `run.log`) with
   `page.tpl.html`. `.github/workflows/docs.yml` renders everything on a macOS runner with the standalone
   binaries, takes the Chrome references there, and deploys the page to GitHub Pages.
-- `kaleido-lite.sh`: no Node, no Chrome: `out/kaleido-lite-bin` (figure to SVG) plus `bin/resvg`.
+- `kaleido-lite.sh`: no Node, no Chrome: `out/kaleido-lite-bin` (figure to SVG) plus `bin/kl-raster` (SVG to PNG,
+  JPEG or PDF, by the output's extension; `out.svg` stops at the SVG).
+- `raster/`: `kl-raster`, resvg 0.48.1 (PNG, JPEG) and svg2pdf 0.13 (PDF) with only the fonts it is given.
+  `raster/build.sh` builds it into `bin/`.
   `qjs-mocks.sh dir` runs the mocks of `dir/sample.txt` through it, one process per figure.
 - `listeners.js`: runs the package's own `lib/*.js` core unmodified with a plotly listener and a
   `push_script!` snippet, then snapshots the live plot.
@@ -79,7 +82,7 @@ from source). The result, `webgl.node`, is 2.4 MB with ANGLE linked in.
 `angle/` holds ANGLE from Chromium 148 (Chrome for Testing's chrome-headless-shell, macOS arm64): `libEGL.dylib`,
 `libGLESv2.dylib`, `libvk_swiftshader.dylib`, `vk_swiftshader_icd.json`.
 
-`bin/` holds the resvg 0.48.1 CLI (the 2D-only binary of the first iteration used quickjs-ng 0.17.0's release `qjs`).
+`bin/` holds `kl-raster` (the 2D-only binary of the first iteration used quickjs-ng 0.17.0's release `qjs`).
 Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 
 ## Results (2026-10-03, macOS arm64, plotly.js 4.1.1)

@@ -63,7 +63,7 @@ const cell = (st) => (st.n ? `${st.ok}/${st.n} render · median ${st.median}% ·
 const relStats = (d) => { for (const k of ["mocks", "gl"]) { const dir = `versions/${d}/${k}/`; S[dir] = scores(dir); T[dir] = times(dir); } return [stats(`versions/${d}/mocks/`), stats(`versions/${d}/gl/`)]; };
 const vars = {
   DATE: new Date().toISOString().slice(0, 10), REPO: repo, COMMIT: commit.slice(0, 7), COMMIT_URL: `${repo}/commit/${commit}`,
-  SIZE_BIN: mb("out/kaleido-lite-bin"), SIZE_MJ: mb("out/kaleido-lite-mathjax-bin"), SIZE_RESVG: mb("bin/resvg"),
+  SIZE_BIN: mb("out/kaleido-lite-bin"), SIZE_MJ: mb("out/kaleido-lite-mathjax-bin"), SIZE_RASTER: mb("bin/kl-raster"),
   SIZE_ANGLE: mb("out/libEGL.dylib", "out/libGLESv2.dylib", "out/libvk_swiftshader.dylib"),
   N: s2.n, OK: s2.ok, MEDIAN: s2.median, WITHIN2: s2.w2, WITHIN3: s2.w3, T2D: s2.t,
   GLN: sg.n, GLOK: sg.ok, GLMEDIAN: sg.median, GLWITHIN2: sg.w2, TGL: sg.t,
