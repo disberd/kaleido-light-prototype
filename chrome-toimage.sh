@@ -1,14 +1,14 @@
 #!/bin/sh
 # Reference PNG from Plotly.toImage inside real headless Chrome (GPU WebGL): ./chrome-toimage.sh figs/x.json out/x.chrome.png
-# MATHJAX=1 also loads MathJax 3 (npm mathjax) first, as Kaleido does. PLOTLY=/abs/plotly.js: another release.
-FIG=$1; OUT=$2; HTML=$(mktemp -t ref).html; PROFILE=$(mktemp -d); DOM=$(mktemp)
+# out.jpg/.jpeg: JPEG with an opaque background, as Kaleido asks for. MATHJAX=1 also loads MathJax 3 (npm mathjax) first, as Kaleido does. PLOTLY=/abs/plotly.js: another release.
+FIG=$1; OUT=$2; case $OUT in *.jpg|*.jpeg) FMT=jpeg;; *) FMT=png;; esac; HTML=$(mktemp -t ref).html; PROFILE=$(mktemp -d); DOM=$(mktemp)
 cat > "$HTML" <<HTML
 <!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><div id="gd"></div>
 ${MATHJAX:+<script src="file://$PWD/node_modules/mathjax/es5/tex-svg.js"></script>}
 <script src="file://${PLOTLY:-$PWD/node_modules/plotly.js-dist/plotly.js}"></script>
 <script>const fig = $(cat "$FIG");
 (window.MathJax?.startup?.promise || Promise.resolve()).then(() => Plotly.newPlot(gd, fig.data, {...fig.layout, width: 700, height: 500}, {...fig.config, topojsonURL: "file://$PWD/node_modules/sane-topojson/dist/"}))
-  .then(() => Plotly.toImage(gd, {format: "png", width: 700, height: 500}))
+  .then(() => Plotly.toImage(gd, {format: "$FMT", width: 700, height: 500, setBackground: "$FMT" === "jpeg" ? "opaque" : undefined}))
   .then((u) => { const p = document.createElement("pre"); p.id = "png"; p.textContent = u; document.body.append(p); })
   .catch((e) => { const p = document.createElement("pre"); p.id = "err"; p.textContent = String(e); document.body.append(p); });</script></body></html>
 HTML
@@ -17,6 +17,6 @@ HTML
 PID=$!
 for _ in $(seq 60); do grep -q '</html>' "$DOM" && break; sleep 0.5; done
 kill $PID 2>/dev/null; wait $PID 2>/dev/null
-node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8");const m=s.match(/<pre id="png">data:image\/png;base64,([^<]*)/);
+node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8");const m=s.match(/<pre id="png">data:image\/[a-z]+;base64,([^<]*)/);
 if(!m){console.error("no png: "+(s.match(/<pre id="err">([^<]*)/)||[,"timeout"])[1]);process.exit(1)}require("fs").writeFileSync(process.argv[2],Buffer.from(m[1],"base64"))' "$DOM" "$OUT"
 rm -rf "$PROFILE" "$HTML" "$DOM"

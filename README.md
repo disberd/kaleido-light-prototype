@@ -256,6 +256,20 @@ Fonts are the macOS system fonts in `/System/Library/Fonts/Supplemental/`.
 - Left: text antialiasing. Our text still has ~10% less ink than Chrome's and glyphs sit up to 0.7 px apart; a
   wider stroke makes shapes worse, so the rest needs Chrome-like antialiasing contrast in the rasterizer.
 
+## Results, Kaleido's defaults and JPEG/PDF (2026-10-04, evening)
+
+- Image size as Kaleido picks it (options, then `layout.width`/`height`, then the template's, then 700x500), WebGL
+  at `plotGlPixelRatio = 2 * scale`, page CSS off unless `PAGE_CSS=1`, exit 1 on a failed render. The harness pins
+  700x500 like the Chrome references; all 108 mocks score as before.
+- `kl-raster` replaces the resvg CLI: PNG pixels identical on all 108 mocks (resvg 0.48.1 either way), 5.5 MB
+  stripped against 4.6 MB.
+- JPEG against `Plotly.toImage` in Chrome with `setBackground: 'opaque'` (as Kaleido): 0.4-3.4% on six 2D and WebGL
+  mocks, 0.5-1.5% above the PNG scores (JPEG noise). Transparent paper comes out black in Chrome, and so here:
+  plotly's `opaque` only styles the live `<svg>`, so the canvas encodes the transparent pixels as black.
+- PDF against Kaleido 1.4.0 itself: page 525x375 pt for 700x500 px (Kaleido 525.12x375.12), text as text with
+  a font subset embedded, WebGL as images. Kaleido prints with 0.1 in margins, so its figure sits in a transparent
+  border, shrunk about 3%; `kl-raster` fills the page.
+
 ## Known gaps
 
 - Text antialiasing: resvg draws text lighter than Chrome even with the 0.15px stroke; with hundreds of labels
